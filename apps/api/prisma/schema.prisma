@@ -1,0 +1,92 @@
+// This is your Prisma schema file.
+// Learn more about it: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  RESTAURANT_ADMIN
+  MANAGER
+  CHEF
+  WAITER
+  CASHIER
+}
+
+// ============================================================
+// Restaurant (Tenant Root)
+// Each restaurant is a fully isolated tenant.
+// All restaurant-scoped data links back to this model via restaurantId.
+// ============================================================
+
+model Restaurant {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(100)
+  slug      String   @unique @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  users  User[]
+  tables Table[]
+
+  @@map("restaurants")
+}
+
+// ============================================================
+// User (Staff Account)
+// Customers do NOT need accounts for QR ordering.
+// restaurantId is nullable to allow SUPER_ADMIN platform-level users.
+// ============================================================
+
+model User {
+  id           String     @id @default(uuid())
+  restaurantId String?    @map("restaurant_id")
+  name         String     @db.VarChar(100)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  role         UserRole   @default(WAITER)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([email])
+  @@map("users")
+}
+
+// ============================================================
+// Table
+// Each physical table has a unique QR token embedded in its QR code.
+// Scanning the QR code resolves the table and restaurant context.
+// ============================================================
+
+model Table {
+  id           String     @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
+  tableNumber  String     @db.VarChar(20)
+  qrToken      String     @unique @default(uuid()) @map("qr_token") @db.VarChar(255)
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, tableNumber])
+  @@index([restaurantId])
+  @@index([qrToken])
+  @@map("tables")
+}
