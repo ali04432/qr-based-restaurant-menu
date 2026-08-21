@@ -109,11 +109,37 @@ npm run build
 
 ---
 
-## API Endpoints (Phase 1)
+## API Endpoints (Phase 2)
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | Health check — confirms server is running |
+### Health
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/health` | None | Health check |
+
+### Authentication
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | None | Register a staff user |
+| POST | `/api/auth/login` | None | Authenticate, returns JWT |
+| GET | `/api/auth/me` | Bearer JWT | Get current user profile |
+
+### Menu
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/menu/categories?restaurantId=<id>` | None | List categories |
+| GET | `/api/menu/items?restaurantId=<id>&categoryId=<id>&q=<search>` | None | List/search menu items |
+| GET | `/api/menu/items/:id` | None | Get single item |
+| POST | `/api/menu/items` | Staff JWT | Create menu item |
+| PATCH | `/api/menu/items/:id` | Staff JWT | Update menu item |
+| DELETE | `/api/menu/items/:id` | Staff JWT | Remove menu item |
+
+### Orders
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/orders` | None | Customer places order |
+| GET | `/api/orders/:id` | None | Track order by ID |
+| GET | `/api/orders?restaurantId=<id>` | Staff JWT | List restaurant orders |
+| PATCH | `/api/orders/:id/status` | Staff JWT | Update order status |
 
 ---
 
@@ -127,8 +153,8 @@ See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for a detailed description of the lay
 
 | Phase | Description | Status |
 |---|---|---|
-| Phase 1 | Foundation & Architecture Setup | ✅ In Progress |
-| Phase 2 | Customer QR Ordering Frontend | ⏳ Pending |
+| Phase 1 | Foundation & Architecture Setup | ✅ Complete |
+| Phase 2 | Customer QR Ordering Frontend + Core API | ✅ Complete |
 | Phase 3 | Restaurant Owner Dashboard | ⏳ Pending |
 | Phase 4 | Kitchen Display System (KDS) | ⏳ Pending |
 | Phase 5 | Waiter & Cashier Panels | ⏳ Pending |

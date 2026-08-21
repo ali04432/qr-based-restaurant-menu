@@ -1,14 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../services/auth';
+import { verifyToken } from '../services/auth/jwt.service';
 import { errors } from './error.middleware';
 
-// ============================================================
-// JWT Authentication Middleware
-// Extracts the Bearer token from the Authorization header,
-// verifies it, and attaches the decoded payload to req.user.
-// ============================================================
+// Custom interface to extend Express Request
+export interface AuthenticatedRequest extends Request {
+  user?: any;
+}
 
-export function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
+// JWT Authentication Middleware
+export function authMiddleware(req: AuthenticatedRequest, _res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -26,7 +26,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   req.user = {
     id: payload.sub,
     restaurantId: payload.restaurantId,
-    name: '',           // Not stored in JWT — fetch from DB when name is needed
+    name: '', // Not stored in JWT – fetch from DB when name is needed
     email: payload.email,
     role: payload.role,
     createdAt: new Date(),

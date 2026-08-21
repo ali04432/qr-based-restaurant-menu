@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
+import { TableProvider } from '../context/TableContext';
+import { CartProvider } from '../context/CartContext';
+import { FavoritesProvider } from '../context/FavoritesContext';
 
 // ============================================================
 // Root Layout
@@ -25,7 +29,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#f97316',
+  themeColor: '#0c0c0e', // Dark theme color
 };
 
 interface RootLayoutProps {
@@ -35,12 +39,16 @@ interface RootLayoutProps {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
-        {/* 
-          Future providers go here (e.g., React Query, Toast, Auth context).
-          Keep this layout minimal — add providers incrementally in later phases. 
-        */}
-        {children}
+      <body className="bg-bg-page text-text-primary antialiased">
+        <Suspense fallback={<div>Loading table context...</div>}>
+          <TableProvider>
+            <CartProvider>
+              <FavoritesProvider>
+                {children}
+              </FavoritesProvider>
+            </CartProvider>
+          </TableProvider>
+        </Suspense>
       </body>
     </html>
   );

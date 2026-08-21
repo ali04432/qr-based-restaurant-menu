@@ -69,7 +69,7 @@ Request
               └─► Route handler
 ```
 
-Roles supported: `SUPER_ADMIN | RESTAURANT_ADMIN | MANAGER | CHEF | WAITER | CASHIER`
+Roles supported: `SUPER_ADMIN | ADMIN | MANAGER | CHEF | WAITER | CASHIER`
 
 ---
 

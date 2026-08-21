@@ -5,7 +5,7 @@
 /** All roles supported by the platform */
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
-  RESTAURANT_ADMIN = 'RESTAURANT_ADMIN',
+  ADMIN = 'ADMIN',
   MANAGER = 'MANAGER',
   CHEF = 'CHEF',
   WAITER = 'WAITER',

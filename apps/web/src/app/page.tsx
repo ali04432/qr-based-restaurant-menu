@@ -1,104 +1,169 @@
-import type { Metadata } from 'next';
+'use client';
 
-// ============================================================
-// Foundation Landing Page (Phase 1 Placeholder)
-// This is a minimal placeholder page confirming the Next.js
-// foundation is working. The real customer UI is Phase 2.
-// ============================================================
+import React, { useState, useEffect, useCallback } from 'react';
 
-export const metadata: Metadata = {
-  title: 'QR Restaurant Menu — Platform',
-  description: 'Multi-tenant restaurant QR ordering platform.',
-};
+// Component Imports
+import { CustomerSidebar } from '../components/customer/CustomerSidebar';
+import { CustomerHeader } from '../components/customer/CustomerHeader';
+import { HeroSection } from '../components/customer/HeroSection';
+import { CategoryNavigation } from '../components/customer/CategoryNavigation';
+import { FoodGrid } from '../components/customer/FoodGrid';
+import { CartDrawer } from '../components/customer/CartDrawer';
+import { BottomInfoBar } from '../components/customer/BottomInfoBar';
 
-export default function HomePage() {
+// Default Export Components
+import AIRecommendations from '../components/customer/AIRecommendations';
+import PromoCard from '../components/customer/PromoCard';
+import FloatingAIAssistant from '../components/customer/FloatingAIAssistant';
+
+// Contexts & Services
+import { useTableContext } from '../context/TableContext';
+import { menuService } from '../services/menu.service';
+import { aiService } from '../services/ai.service';
+import type { MenuCategory, MenuItem } from '@qr-menu/shared';
+
+const DEFAULT_RESTAURANT_ID = '1';
+
+export default function CustomerMenuPage() {
+  const { restaurantId, tableNumber, isLoading: isTableLoading } = useTableContext();
+  const effectiveRestaurantId = restaurantId ?? DEFAULT_RESTAURANT_ID;
+
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [aiRecommendations, setAiRecommendations] = useState<MenuItem[]>([]);
+  const [activeCategoryId, setActiveCategoryId] = useState('cat-all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isMenuLoading, setIsMenuLoading] = useState(true);
+  const [isAiLoading, setIsAiLoading] = useState(true);
+
+  // Load categories
+  useEffect(() => {
+    if (isTableLoading) return;
+    menuService.getCategories(effectiveRestaurantId).then((cats) => {
+      setCategories(cats);
+    });
+  }, [effectiveRestaurantId, isTableLoading]);
+
+  // Load menu items
+  useEffect(() => {
+    if (isTableLoading) return;
+    setIsMenuLoading(true);
+    menuService
+      .getMenuItems(
+        effectiveRestaurantId,
+        activeCategoryId === 'cat-all' ? undefined : activeCategoryId,
+        searchQuery || undefined
+      )
+      .then((items) => {
+        setMenuItems(items);
+        setIsMenuLoading(false);
+      });
+  }, [effectiveRestaurantId, activeCategoryId, searchQuery, isTableLoading]);
+
+  // Load AI recommendations
+  useEffect(() => {
+    if (isTableLoading) return;
+    setIsAiLoading(true);
+    aiService
+      .getRecommendations(effectiveRestaurantId, tableNumber ?? 'takeaway')
+      .then((items) => {
+        setAiRecommendations(items);
+        setIsAiLoading(false);
+      });
+  }, [effectiveRestaurantId, tableNumber, isTableLoading]);
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q);
+    if (q) setActiveCategoryId('cat-all'); // reset to all when searching
+  }, []);
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-100 flex items-center justify-center">
-      <div className="page-container">
-        <div className="max-w-2xl mx-auto text-center py-24 animate-fade-in">
+    <div className="relative min-h-screen bg-bg-page antialiased">
+      {/* ── Background Noise Texture Restoration (Matches Pic 0) ── */}
+      <div className="absolute inset-0 bg-noise-pattern opacity-[0.02] pointer-events-none mix-blend-overlay" />
 
-          {/* Logo mark */}
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-brand-500 shadow-lg mb-8">
-            <svg
-              className="w-10 h-10 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"
+      {/* ── Sidebar (desktop only — fixed left) */}
+      <CustomerSidebar />
+
+      {/* ── Main content area ── */}
+      <div className="relative z-10 lg:pl-64 flex flex-col min-h-screen">
+
+        {/* Sticky header */}
+        <CustomerHeader onSearch={handleSearch} />
+
+        {/* Page content */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 xl:px-12 py-8 max-w-screen-2xl mx-auto w-full">
+
+          {/* Hero banner */}
+          <section id="hero" aria-label="Featured dishes">
+            <HeroSection />
+          </section>
+
+          {/* AI Picks (skip when searching) */}
+          {!searchQuery && (
+            <section id="ai-picks" aria-label="AI Recommendations">
+              {isAiLoading ? (
+                <div className="mb-12 animate-pulse">
+                  <div className="h-8 bg-surface-elevated rounded-lg w-48 mb-6" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="glass-card !p-0 h-80">
+                        <div className="h-48 bg-surface-elevated/50 w-full border-b border-[var(--border-color)]" />
+                        <div className="p-5">
+                          <div className="h-6 bg-surface-elevated rounded mb-3 w-3/4" />
+                          <div className="h-4 bg-surface-elevated rounded mb-4 w-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <AIRecommendations items={aiRecommendations} tableNumber={tableNumber} />
+              )}
+            </section>
+          )}
+
+          {/* Promo Cards */}
+          {!searchQuery && (
+            <section id="offers" aria-label="Special offers">
+              <PromoCard />
+            </section>
+          )}
+
+          {/* Full Menu */}
+          <section id="menu" aria-label="Full menu">
+            <div className="mb-6">
+              <h2 className="text-2xl font-display font-bold text-white">
+                {searchQuery ? `Search results for "${searchQuery}"` : 'Full Menu'}
+              </h2>
+              <p className="text-text-secondary text-sm mt-1">
+                {menuItems.length} {menuItems.length === 1 ? 'item' : 'items'} available
+              </p>
+            </div>
+
+            {!searchQuery && (
+              <CategoryNavigation
+                categories={categories}
+                activeCategoryId={activeCategoryId}
+                onSelectCategory={setActiveCategoryId}
               />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75z"
-              />
-            </svg>
-          </div>
+            )}
 
-          {/* Heading */}
-          <h1 className="text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-            QR Restaurant Menu
-          </h1>
+            <FoodGrid items={menuItems} loading={isMenuLoading} />
+          </section>
 
-          {/* Sub-heading */}
-          <p className="text-xl text-gray-500 mb-10 leading-relaxed">
-            Multi-tenant restaurant QR ordering platform.
-            <br />
-            <span className="text-brand-500 font-semibold">Phase 1 Foundation</span> — successfully initialized.
-          </p>
-
-          {/* Status badges */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
-            {[
-              { label: 'Next.js 14', color: 'bg-gray-900 text-white' },
-              { label: 'Express API', color: 'bg-green-100 text-green-800' },
-              { label: 'PostgreSQL', color: 'bg-blue-100 text-blue-800' },
-              { label: 'Prisma ORM', color: 'bg-indigo-100 text-indigo-800' },
-              { label: 'Socket.io', color: 'bg-yellow-100 text-yellow-800' },
-              { label: 'Multi-Tenant', color: 'bg-brand-100 text-brand-800' },
-            ].map((badge) => (
-              <span
-                key={badge.label}
-                className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${badge.color}`}
-              >
-                {badge.label}
-              </span>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="/api/health"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary"
-              id="health-check-link"
-            >
-              Check API Health
-            </a>
-            <a
-              href="https://github.com/ali04432/qr-based-restaurant-menu"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary"
-              id="github-link"
-            >
-              View Repository
-            </a>
-          </div>
-
-          {/* Phase notice */}
-          <p className="mt-12 text-sm text-gray-400">
-            Phase 2 — Customer QR Ordering UI coming next.
-          </p>
-        </div>
+          {/* Footer info */}
+          <section id="about" aria-label="Restaurant info">
+            <BottomInfoBar />
+          </section>
+        </main>
       </div>
-    </main>
+
+      {/* Global overlays */}
+      <CartDrawer />
+
+      {/* Floating AI assistant */}
+      <FloatingAIAssistant />
+    </div>
   );
 }

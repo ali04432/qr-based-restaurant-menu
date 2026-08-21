@@ -9,27 +9,29 @@
    ============================================================ */
 :root {
   /* Brand */
-  --brand-primary: hsl(24, 85%, 50%);
-  --brand-primary-dark: hsl(24, 82%, 42%);
-  --brand-primary-light: hsl(24, 95%, 85%);
+  --brand-primary: hsl(32, 95%, 52%);
+  /* Warm amber/gold */
+  --brand-primary-dark: hsl(32, 90%, 42%);
+  --brand-primary-light: hsl(32, 100%, 75%);
 
   /* Backgrounds */
-  --bg-page: hsl(0, 0%, 100%);
-  --bg-muted: hsl(210, 20%, 98%);
-  --bg-elevated: hsl(0, 0%, 98%);
+  --bg-page: #0c0c0e;
+  /* Deep charcoal near-black */
+  --bg-muted: #141417;
+  --bg-elevated: #1a1a22;
 
   /* Text */
-  --text-primary: hsl(220, 15%, 10%);
-  --text-secondary: hsl(220, 10%, 40%);
-  --text-muted: hsl(220, 8%, 60%);
+  --text-primary: hsl(0, 0%, 98%);
+  --text-secondary: hsl(0, 0%, 80%);
+  --text-muted: hsl(0, 0%, 60%);
 
   /* Borders */
-  --border-color: hsl(220, 13%, 91%);
+  --border-color: rgba(255, 255, 255, 0.08);
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6);
 
   /* Transitions */
   --transition-fast: 150ms ease;
@@ -38,9 +40,10 @@
 }
 
 /* ============================================================
-   Base Styles
+   Base Styles & Ambient Background Picture Integration
    ============================================================ */
 @layer base {
+
   *,
   *::before,
   *::after {
@@ -55,14 +58,28 @@
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: var(--bg-page);
     color: var(--text-primary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+
+    /* High-resolution dark moody restaurant background image */
+    background-color: #0c0c0e;
+    background-image:
+      linear-gradient(to bottom, rgba(12, 12, 14, 0.88), rgba(12, 12, 14, 0.96)),
+      url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=2000&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     font-weight: 700;
     line-height: 1.2;
@@ -81,28 +98,99 @@
    ============================================================ */
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5
-           bg-brand-500 text-white font-semibold text-sm
-           shadow-md hover:bg-brand-600 active:bg-brand-700
-           transition-all duration-150 ease-out
-           focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 bg-brand-500 text-white font-semibold text-sm shadow-md hover:bg-brand-600 active:bg-brand-700 transition-all duration-150 ease-out focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5
-           bg-white text-brand-600 font-semibold text-sm border border-brand-200
-           hover:bg-brand-50 active:bg-brand-100
-           transition-all duration-150 ease-out
-           focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 bg-surface-elevated text-brand-500 font-semibold text-sm border border-[var(--border-color)] hover:bg-surface-muted hover:text-brand-400 active:bg-surface transition-all duration-150 ease-out focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c0c0e] disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .card {
-    @apply bg-white rounded-2xl border border-gray-100 shadow-sm p-6;
+    @apply bg-surface-elevated/80 backdrop-blur-md rounded-2xl border border-[var(--border-color)] shadow-md p-6;
+  }
+
+  .glass-card {
+    @apply backdrop-blur-md bg-black/50 rounded-2xl border border-[var(--border-color)] shadow-md p-6;
+  }
+
+  .gold-badge {
+    @apply inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-brand-500/20 text-brand-500 border border-brand-500/30;
   }
 
   .page-container {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* ── Scrollbars */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ============================================================
+   Tailwind Extension Utilities
+   ============================================================ */
+@layer utilities {
+
+  /* Amber glow shadow */
+  .shadow-glow {
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+  }
+
+  .shadow-glow-strong {
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.55);
+  }
+
+  /* Slide-up entry animation */
+  .animate-slide-up {
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease both;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }

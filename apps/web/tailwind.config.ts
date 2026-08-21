@@ -24,9 +24,10 @@ const config: Config = {
           950: 'hsl(24, 65%, 14%)',
         },
         surface: {
-          DEFAULT: 'hsl(0, 0%, 100%)',
-          muted: 'hsl(210, 20%, 98%)',
-          elevated: 'hsl(0, 0%, 98%)',
+          DEFAULT: '#0c0c0e',
+          muted: '#141417',
+          elevated: '#1a1a22',
+          border: 'rgba(255, 255, 255, 0.08)',
         },
       },
       fontFamily: {
@@ -35,6 +36,10 @@ const config: Config = {
       },
       borderRadius: {
         '4xl': '2rem',
+      },
+      boxShadow: {
+        glow: '0 0 20px rgba(245, 158, 11, 0.15)',
+        'glow-strong': '0 0 30px rgba(245, 158, 11, 0.3)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
