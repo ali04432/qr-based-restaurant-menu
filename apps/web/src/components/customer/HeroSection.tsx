@@ -5,7 +5,7 @@ import { Star, Clock, Flame, ArrowRight, Play } from 'lucide-react';
 
 export const HeroSection: React.FC = () => {
   return (
-    <section className="relative w-full rounded-3xl overflow-hidden border border-zinc-800/80 p-6 md:p-10 mb-8 min-h-[380px] flex items-center">
+    <section data-hero="true" className="relative w-full rounded-3xl overflow-hidden border border-zinc-800/80 p-6 md:p-10 mb-8 min-h-[380px] flex items-center">
       {/* ── Background Image Layer (Original Bar Interior) ── */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -14,11 +14,11 @@ export const HeroSection: React.FC = () => {
         }}
       />
 
-      {/* Dark Overlay gradient for high contrast text readability */}
-      <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/95 via-zinc-950/80 to-zinc-950/60" />
+      {/* Stronger Dark Overlay — always applied so text stays readable in any theme */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/85 to-black/60" />
 
-      {/* Content Layer */}
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
+      {/* Content Layer — data-hero pins ALL text to white regardless of [data-theme='light'] overrides */}
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full" data-hero="true">
         {/* Left Text */}
         <div className="lg:col-span-7 space-y-6">
           {/* Top Tag */}

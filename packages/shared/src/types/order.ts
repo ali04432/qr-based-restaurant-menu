@@ -7,7 +7,17 @@ export interface CartItem {
   specialInstructions?: string;
 }
 
-export type OrderStatus = 'PENDING' | 'RECEIVED' | 'IN_KITCHEN' | 'COOKING' | 'READY' | 'SERVED' | 'CANCELLED';
+export type OrderStatus =
+  | 'PENDING'
+  | 'RECEIVED'
+  | 'NEW'
+  | 'IN_KITCHEN'
+  | 'COOKING'
+  | 'PREPARING'
+  | 'READY'
+  | 'SERVED'
+  | 'COMPLETED'
+  | 'CANCELLED';
 export type PaymentMethod = 'CASH' | 'CARD' | 'ONLINE';
 
 export interface OrderItem {
@@ -40,6 +50,8 @@ export interface CustomerOrderRequest {
   tableId: string;
   items: Array<{
     menuItemId: string;
+    name?: string;
+    price?: number;
     quantity: number;
     specialInstructions?: string;
   }>;

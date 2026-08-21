@@ -26,5 +26,8 @@
   },
   "dependencies": {
     "lucide-react": "^1.33.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.9.1"
   }
 }

@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. RESTAURANT (Multi-tenant system ke liye)
+model Restaurant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users       User[]
+  menuItems   MenuItem[]
+  orders      Order[]
+}
+
+// 2. USERS (Staff Roles: Chef, Waiter, Admin, Cashier)
+model User {
+  id           String     @id @default(uuid())
+  restaurantId String
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         String     // e.g., ADMIN, CHEF, WAITER, CASHIER
+  createdAt    DateTime   @default(now())
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+// 3. MENU ITEMS
+model MenuItem {
+  id           String     @id @default(uuid())
+  restaurantId String
+  name         String
+  price        Float
+  category     String
+  isAvailable  Boolean    @default(true)
+  
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  orderItems   OrderItem[]
+}
+
+// 4. ORDERS (KDS aur Customer Tracking ke liye)
+model Order {
+  id           String      @id @default(uuid())
+  restaurantId String
+  tableNumber  String
+  status       String      @default("NEW") // Options: NEW, PREPARING, READY, COMPLETED
+  totalAmount  Float
+  note         String?     // Special instructions (e.g., No onions)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
+  items        OrderItem[]
+}
+
+// 5. ORDER ITEMS (Order ke andar ki details)
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  price      Float
+  
+  order      Order    @relation(fields: [orderId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+}

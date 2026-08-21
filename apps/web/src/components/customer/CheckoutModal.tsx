@@ -21,9 +21,11 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
     try {
       const order = await orderService.submitOrder({
         restaurantId: restaurantId || '1',
-        tableId: 't-1',
+        tableId: tableNumber ? `t-${tableNumber}` : 't-07',
         items: items.map(i => ({
           menuItemId: i.menuItem.id,
+          name: i.menuItem.name,
+          price: i.menuItem.price,
           quantity: i.quantity,
           specialInstructions: i.specialInstructions
         })),

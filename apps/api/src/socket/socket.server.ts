@@ -44,7 +44,7 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
   });
 
   io.on('connection', (socket: Socket) => {
-    // If the client provides a restaurantId, join the restaurant room
+    // If the client provides a restaurantId in handshake query or auth, join the restaurant room
     const restaurantId =
       socket.data.restaurantId ?? (socket.handshake.query.restaurantId as string | undefined);
 
@@ -53,6 +53,15 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
       void socket.join(room);
       console.log(`[Socket] ${socket.id} joined room ${room}`);
     }
+
+    // Also listen for explicit join events
+    socket.on('join:restaurant', (rId: string) => {
+      if (rId) {
+        const room = `restaurant:${rId}`;
+        void socket.join(room);
+        console.log(`[Socket] ${socket.id} joined room via event: ${room}`);
+      }
+    });
 
     registerSocketHandlers(socket);
   });
@@ -73,12 +82,16 @@ export function getSocketServer(): SocketServer {
 }
 
 /**
- * Emit an event to all clients in a specific restaurant's room.
+ * Emit an event to all clients in a specific restaurant's room and broadcast to all connected clients.
  */
 export function emitToRestaurant(
   restaurantId: string,
   event: string,
   data: unknown
 ): void {
-  getSocketServer().to(`restaurant:${restaurantId}`).emit(event, data);
+  const server = getSocketServer();
+  // Emit to targeted restaurant room
+  server.to(`restaurant:${restaurantId}`).emit(event, data);
+  // Also emit globally so KDS screens listening on the main namespace receive it instantly
+  server.emit(event, data);
 }

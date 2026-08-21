@@ -36,18 +36,25 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
+import { AuthProvider } from '../context/AuthContext';
+import { ThemeProvider } from '../context/ThemeContext';
+
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-bg-page text-text-primary antialiased">
-        <Suspense fallback={<div>Loading table context...</div>}>
-          <TableProvider>
-            <CartProvider>
-              <FavoritesProvider>
-                {children}
-              </FavoritesProvider>
-            </CartProvider>
-          </TableProvider>
+        <Suspense fallback={<div>Loading app...</div>}>
+          <ThemeProvider>
+            <AuthProvider>
+              <TableProvider>
+                <CartProvider>
+                  <FavoritesProvider>
+                    {children}
+                  </FavoritesProvider>
+                </CartProvider>
+              </TableProvider>
+            </AuthProvider>
+          </ThemeProvider>
         </Suspense>
       </body>
     </html>

@@ -1,21 +1,48 @@
-'use client';
-
 import React, { useState } from 'react';
 import { ShoppingBag, X, MapPin, UtensilsCrossed, Plus, Minus, Trash2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useCartContext } from '../../context/CartContext';
+import { useTableContext } from '../../context/TableContext';
+import { orderService } from '../../services/order.service';
 
 export function CartDrawer() {
   const { isDrawerOpen, closeDrawer, items, updateQuantity, removeItem, clearCart, total } = useCartContext();
+  const { restaurantId, tableNumber } = useTableContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isDrawerOpen) return null;
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (items.length === 0) return;
     setIsSubmitting(true);
+    setErrorMessage(null);
 
-    setTimeout(() => {
+    try {
+      const payloadItems = items.map((cartItem: any) => {
+        const item = cartItem.menuItem || cartItem;
+        const itemId = item.id || cartItem.id || cartItem.menuItemId || 'item-1';
+        const itemName = item.name || cartItem.name || 'Delicious Dish';
+        const itemPrice = Number(item.price || cartItem.price || 0);
+        return {
+          menuItemId: String(itemId),
+          name: itemName,
+          price: itemPrice,
+          quantity: Number(cartItem.quantity || 1),
+          specialInstructions: cartItem.specialInstructions || undefined,
+        };
+      });
+
+      const restId = restaurantId || '1';
+      const tblId = tableNumber ? `t-${tableNumber}` : 't-07';
+
+      await orderService.submitOrder({
+        restaurantId: restId,
+        tableId: tblId,
+        items: payloadItems,
+        paymentMethod: 'ONLINE',
+      });
+
       setIsSubmitting(false);
       setOrderPlaced(true);
       setTimeout(() => {
@@ -23,7 +50,11 @@ export function CartDrawer() {
         setOrderPlaced(false);
         closeDrawer();
       }, 2000);
-    }, 1200);
+    } catch (err: any) {
+      console.error('[CartDrawer] Error submitting order to backend API:', err);
+      setErrorMessage(err?.message || 'Failed to place order. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -169,6 +200,12 @@ export function CartDrawer() {
                   <span className="text-amber-400">Rs. {total.toLocaleString()}</span>
                 </div>
               </div>
+
+              {errorMessage && (
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center">
+                  {errorMessage}
+                </div>
+              )}
 
               <button
                 onClick={handleCheckout}

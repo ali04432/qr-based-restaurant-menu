@@ -40,6 +40,267 @@
 }
 
 /* ============================================================
+   Light Theme Custom Properties (Design Tokens)
+   ============================================================ */
+:root[data-theme='light'],
+html[data-theme='light'],
+body[data-theme='light'] {
+  /* Backgrounds */
+  --bg-page: #f8fafc;
+  --bg-muted: #f1f5f9;
+  --bg-elevated: #ffffff;
+
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+
+  /* Borders */
+  --border-color: rgba(0, 0, 0, 0.09);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] body,
+body[data-theme='light'] {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(to bottom, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.97)),
+    url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=2000&auto=format&fit=crop');
+  color: #0f172a;
+}
+
+[data-theme='light'] .glass-card,
+[data-theme='light'] .card {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+
+/* Light mode component overrides for customer & dashboard UI */
+[data-theme='light'] aside,
+[data-theme='light'] header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme='light'] .bg-zinc-950,
+[data-theme='light'] .bg-zinc-900,
+[data-theme='light'] .bg-[#0c0c0e],
+[data-theme='light'] .bg-[#0D0F12],
+[data-theme='light'] .bg-[#131518] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme='light'] .bg-zinc-900\/60,
+[data-theme='light'] .bg-zinc-900\/80,
+[data-theme='light'] .bg-zinc-900\/90 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme='light'] .bg-zinc-800 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+[data-theme='light'] .border-zinc-800,
+[data-theme='light'] .border-zinc-800\/40,
+[data-theme='light'] .border-zinc-800\/50,
+[data-theme='light'] .border-zinc-800\/60,
+[data-theme='light'] .border-zinc-800\/80,
+[data-theme='light'] .border-zinc-700 {
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme='light'] .text-white {
+  color: #0f172a !important;
+}
+
+[data-theme='light'] .text-zinc-200,
+[data-theme='light'] .text-zinc-300 {
+  color: #334155 !important;
+}
+
+[data-theme='light'] .text-zinc-400 {
+  color: #64748b !important;
+}
+
+[data-theme='light'] .text-zinc-500 {
+  color: #94a3b8 !important;
+}
+
+[data-theme='light'] input {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* ============================================================
+   Hero Section Exemption — always white text over dark overlay
+   ============================================================ */
+
+/* The hero has a permanent dark photo overlay, so all text inside
+   must remain white regardless of whether light mode is active. */
+[data-theme='light'] [data-hero='true'] .text-white,
+[data-hero='true'] .text-white {
+  color: #ffffff !important;
+}
+
+[data-theme='light'] [data-hero='true'] .text-zinc-200,
+[data-theme='light'] [data-hero='true'] .text-zinc-300,
+[data-theme='light'] [data-hero='true'] .text-zinc-400 {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+[data-theme='light'] [data-hero='true'] .text-xs,
+[data-theme='light'] [data-hero='true'] .text-sm,
+[data-theme='light'] [data-hero='true'] .text-base,
+[data-theme='light'] [data-hero='true'] h1,
+[data-theme='light'] [data-hero='true'] p,
+[data-theme='light'] [data-hero='true'] span {
+  color: inherit;
+}
+
+/* Ensure hero container bg classes are never overridden to white */
+[data-theme='light'] [data-hero='true'] .bg-zinc-900\/80,
+[data-theme='light'] [data-hero='true'] .bg-zinc-900\/90,
+[data-theme='light'] [data-hero='true'] .bg-zinc-900\/50 {
+  background-color: rgba(24, 24, 27, 0.8) !important;
+}
+
+/* Specific fixes for inline-tagged text classes in hero */
+[data-hero='true'] h1 { color: #ffffff; }
+[data-hero='true'] p  { color: rgba(255, 255, 255, 0.85); }
+
+/* Keep hero section border dark in light mode (image bg is always dark) */
+[data-theme='light'] section[data-hero='true'] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ============================================================
+   KDS Light Theme Overrides (scoped to data-kds-theme="light")
+   ============================================================ */
+
+/* Root KDS wrapper */
+[data-kds-theme='light'] {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Sidebar */
+[data-kds-theme='light'] aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* All inline hex dark backgrounds used in KDS */
+[data-kds-theme='light'] .bg-\[\#08090B\],
+[data-kds-theme='light'] .bg-\[\#0D0F12\],
+[data-kds-theme='light'] .bg-\[\#131518\] {
+  background-color: #ffffff !important;
+}
+
+/* Header */
+[data-kds-theme='light'] header {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Main content area */
+[data-kds-theme='light'] main {
+  background-color: #f1f5f9 !important;
+}
+
+/* Kanban column cards */
+[data-kds-theme='light'] .bg-zinc-800\/40,
+[data-kds-theme='light'] .bg-zinc-800\/30,
+[data-kds-theme='light'] .bg-zinc-800\/50,
+[data-kds-theme='light'] .bg-zinc-900\/50,
+[data-kds-theme='light'] .bg-zinc-900\/80,
+[data-kds-theme='light'] .bg-zinc-800 {
+  background-color: #f8fafc !important;
+}
+
+/* Borders */
+[data-kds-theme='light'] .border-zinc-800\/60,
+[data-kds-theme='light'] .border-zinc-800\/40,
+[data-kds-theme='light'] .border-zinc-800\/30,
+[data-kds-theme='light'] .border-zinc-800,
+[data-kds-theme='light'] .border-zinc-700\/50,
+[data-kds-theme='light'] .border-\[rgba\(255\,255\,255\,0\.08\)\],
+[data-kds-theme='light'] .border-\[rgba\(255\,255\,255\,0\.05\)\] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Text */
+[data-kds-theme='light'] .text-white {
+  color: #0f172a !important;
+}
+[data-kds-theme='light'] .text-zinc-300 {
+  color: #334155 !important;
+}
+[data-kds-theme='light'] .text-zinc-400 {
+  color: #64748b !important;
+}
+[data-kds-theme='light'] .text-zinc-500 {
+  color: #94a3b8 !important;
+}
+[data-kds-theme='light'] .text-zinc-600 {
+  color: #b0bec5 !important;
+}
+
+/* Inputs */
+[data-kds-theme='light'] input {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+[data-kds-theme='light'] input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Buttons with dark hex backgrounds */
+[data-kds-theme='light'] .bg-\[\#131518\] {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+}
+
+/* Sidebar nav inactive buttons */
+[data-kds-theme='light'] .hover\:bg-zinc-800\/50:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Clock widget */
+[data-kds-theme='light'] .bg-\[\#131518\].rounded-lg {
+  background-color: #f1f5f9 !important;
+}
+
+/* Kanban count badges */
+[data-kds-theme='light'] .bg-zinc-800.text-zinc-300 {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+/* Order card base (the card surface inside columns) */
+[data-kds-theme='light'] .bg-\[rgba\(255\,255\,255\,0\.02\)\],
+[data-kds-theme='light'] .bg-\[rgba\(255\,255\,255\,0\.03\)\] {
+  background-color: #ffffff !important;
+}
+
+/* Scrollbar track in light mode */
+[data-kds-theme='light'] .custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+[data-kds-theme='light'] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+}
+
+/* ============================================================
    Base Styles & Ambient Background Picture Integration
    ============================================================ */
 @layer base {

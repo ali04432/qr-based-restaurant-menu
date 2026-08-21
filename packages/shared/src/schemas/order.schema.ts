@@ -4,9 +4,10 @@ import { z } from 'zod';
 // Order Zod Schemas
 // ============================================================
 
-/** A single line-item in a customer order request */
 const orderItemSchema = z.object({
-  menuItemId: z.string().uuid('Invalid menu item ID'),
+  menuItemId: z.string().min(1, 'Invalid menu item ID'),
+  name: z.string().optional(),
+  price: z.number().optional(),
   quantity: z.number().int().min(1, 'Quantity must be at least 1').max(20),
   specialInstructions: z.string().max(500).trim().optional(),
 });
@@ -32,12 +33,26 @@ export const customerOrderSchema = z.object({
  * Schema for updating an order's status (used by kitchen / staff).
  */
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['PENDING', 'RECEIVED', 'IN_KITCHEN', 'COOKING', 'READY', 'SERVED', 'CANCELLED'], {
-    errorMap: () => ({
-      message:
-        'status must be one of: PENDING, RECEIVED, IN_KITCHEN, COOKING, READY, SERVED, CANCELLED',
-    }),
-  }),
+  status: z.enum(
+    [
+      'PENDING',
+      'RECEIVED',
+      'NEW',
+      'IN_KITCHEN',
+      'COOKING',
+      'PREPARING',
+      'READY',
+      'SERVED',
+      'COMPLETED',
+      'CANCELLED',
+    ],
+    {
+      errorMap: () => ({
+        message:
+          'status must be one of: PENDING, RECEIVED, NEW, IN_KITCHEN, COOKING, PREPARING, READY, SERVED, COMPLETED, CANCELLED',
+      }),
+    }
+  ),
 });
 
 export type CustomerOrderSchema = z.infer<typeof customerOrderSchema>;
