@@ -1,0 +1,160 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  RESTAURANT_ADMIN
+  CHEF
+  WAITER
+  CASHIER
+}
+
+enum OrderStatus {
+  NEW
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Restaurant {
+  id               String      @id @default(uuid())
+  name             String
+  logo             String?     // URL to logo image
+  themeColor       String      @default("#4F46E5") // Indigo branding default
+  subscriptionPlan String      @default("FREE")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  users            User[]
+  tables           Table[]
+  menuItems        MenuItem[]
+  orders           Order[]
+
+  @@map("restaurants")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  role         Role       @default(WAITER)
+  name         String
+  email        String     @unique
+  phone        String?
+  passwordHash String
+  salary       Float      @default(0.0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  actionLogs   StaffActionLog[]
+
+  @@index([restaurantId])
+  @@map("users")
+}
+
+model Table {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableNumber  String
+  qrCodeUrl    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orders       Order[]
+
+  @@unique([restaurantId, tableNumber])
+  @@index([restaurantId])
+  @@map("tables")
+}
+
+model MenuItem {
+  id           String      @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  price        Float
+  modelUrl     String?     // URL for 3D rotatable model (GLTF/GLB)
+  imageUrl     String?     // Image fallback url
+  category     String
+  isAvailable  Boolean     @default(true)
+  costPrice    Float       @default(0.0)
+  stockCount   Int?        // Null means unlimited
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  orderItems   OrderItem[]
+
+  @@index([restaurantId])
+  @@map("menu_items")
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  restaurantId  String
+  restaurant    Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tableId       String
+  table         Table         @relation(fields: [tableId], references: [id])
+  status        OrderStatus   @default(NEW)
+  paymentStatus PaymentStatus @default(PENDING)
+  total         Float
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  orderItems    OrderItem[]
+  feedback      Feedback?
+
+  @@index([restaurantId])
+  @@index([tableId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId   String
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity     Int
+  notes        String?
+  priceAtOrder Float    // Storing price at order time in case restaurant changes menu price later
+  costPriceAtOrder Float @default(0.0) // Store cost at order time for profit calculation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rating    Int      // 1 to 5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@map("feedback")
+}
+
+model StaffActionLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  details   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("staff_action_logs")
+}
