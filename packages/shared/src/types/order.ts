@@ -48,6 +48,11 @@ export interface Order {
 export interface CustomerOrderRequest {
   restaurantId: string;
   tableId: string;
+  branchId?: string;
+  customerPhone?: string;
+  loyaltyAccountId?: string;
+  rewardCode?: string;
+  promoCode?: string;
   items: Array<{
     menuItemId: string;
     name?: string;

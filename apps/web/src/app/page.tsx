@@ -1,169 +1,118 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 
-// Component Imports
-import { CustomerSidebar } from '../components/customer/CustomerSidebar';
-import { CustomerHeader } from '../components/customer/CustomerHeader';
-import { HeroSection } from '../components/customer/HeroSection';
-import { CategoryNavigation } from '../components/customer/CategoryNavigation';
-import { FoodGrid } from '../components/customer/FoodGrid';
-import { CartDrawer } from '../components/customer/CartDrawer';
-import { BottomInfoBar } from '../components/customer/BottomInfoBar';
-
-// Default Export Components
+import CustomerLayout from '../components/customer/CustomerLayout';
+import HeroSection from '../components/customer/HeroSection';
+import CategoryNavigation from '../components/customer/CategoryNavigation';
+import FoodGrid from '../components/customer/FoodGrid';
 import AIRecommendations from '../components/customer/AIRecommendations';
-import PromoCard from '../components/customer/PromoCard';
-import FloatingAIAssistant from '../components/customer/FloatingAIAssistant';
+import BottomInfoBar from '../components/customer/BottomInfoBar';
 
-// Contexts & Services
-import { useTableContext } from '../context/TableContext';
-import { menuService } from '../services/menu.service';
-import { aiService } from '../services/ai.service';
-import type { MenuCategory, MenuItem } from '@qr-menu/shared';
-
-const DEFAULT_RESTAURANT_ID = '1';
-
-export default function CustomerMenuPage() {
-  const { restaurantId, tableNumber, isLoading: isTableLoading } = useTableContext();
-  const effectiveRestaurantId = restaurantId ?? DEFAULT_RESTAURANT_ID;
-
-  const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [aiRecommendations, setAiRecommendations] = useState<MenuItem[]>([]);
-  const [activeCategoryId, setActiveCategoryId] = useState('cat-all');
+export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isMenuLoading, setIsMenuLoading] = useState(true);
-  const [isAiLoading, setIsAiLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState('All');
 
-  // Load categories
-  useEffect(() => {
-    if (isTableLoading) return;
-    menuService.getCategories(effectiveRestaurantId).then((cats) => {
-      setCategories(cats);
-    });
-  }, [effectiveRestaurantId, isTableLoading]);
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
 
-  // Load menu items
-  useEffect(() => {
-    if (isTableLoading) return;
-    setIsMenuLoading(true);
-    menuService
-      .getMenuItems(
-        effectiveRestaurantId,
-        activeCategoryId === 'cat-all' ? undefined : activeCategoryId,
-        searchQuery || undefined
-      )
-      .then((items) => {
-        setMenuItems(items);
-        setIsMenuLoading(false);
-      });
-  }, [effectiveRestaurantId, activeCategoryId, searchQuery, isTableLoading]);
-
-  // Load AI recommendations
-  useEffect(() => {
-    if (isTableLoading) return;
-    setIsAiLoading(true);
-    aiService
-      .getRecommendations(effectiveRestaurantId, tableNumber ?? 'takeaway')
-      .then((items) => {
-        setAiRecommendations(items);
-        setIsAiLoading(false);
-      });
-  }, [effectiveRestaurantId, tableNumber, isTableLoading]);
-
-  const handleSearch = useCallback((q: string) => {
-    setSearchQuery(q);
-    if (q) setActiveCategoryId('cat-all'); // reset to all when searching
-  }, []);
+  const handleCategorySelect = (category: string) => {
+    setActiveCategory(category);
+  };
 
   return (
-    <div className="relative min-h-screen bg-bg-page antialiased">
-      {/* ── Background Noise Texture Restoration (Matches Pic 0) ── */}
-      <div className="absolute inset-0 bg-noise-pattern opacity-[0.02] pointer-events-none mix-blend-overlay" />
+    <CustomerLayout onSearch={handleSearch}>
+      <div className="mx-auto w-full max-w-[1600px] px-4 pb-10 sm:px-6 lg:px-8">
+        {/* Hero */}
+        <section className="pt-5 sm:pt-7 lg:pt-8">
+          <HeroSection />
+        </section>
 
-      {/* ── Sidebar (desktop only — fixed left) */}
-      <CustomerSidebar />
+        {/* Categories */}
+        <section className="mt-8">
+          <CategoryNavigation
+            activeCategory={activeCategory}
+            onSelectCategory={handleCategorySelect}
+          />
+        </section>
 
-      {/* ── Main content area ── */}
-      <div className="relative z-10 lg:pl-64 flex flex-col min-h-screen">
-
-        {/* Sticky header */}
-        <CustomerHeader onSearch={handleSearch} />
-
-        {/* Page content */}
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 xl:px-12 py-8 max-w-screen-2xl mx-auto w-full">
-
-          {/* Hero banner */}
-          <section id="hero" aria-label="Featured dishes">
-            <HeroSection />
+        {/* AI Recommendations */}
+        {!searchQuery && activeCategory === 'All' && (
+          <section className="mt-10">
+            <AIRecommendations onSelectCategory={handleCategorySelect} />
           </section>
+        )}
 
-          {/* AI Picks (skip when searching) */}
-          {!searchQuery && (
-            <section id="ai-picks" aria-label="AI Recommendations">
-              {isAiLoading ? (
-                <div className="mb-12 animate-pulse">
-                  <div className="h-8 bg-surface-elevated rounded-lg w-48 mb-6" />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="glass-card !p-0 h-80">
-                        <div className="h-48 bg-surface-elevated/50 w-full border-b border-[var(--border-color)]" />
-                        <div className="p-5">
-                          <div className="h-6 bg-surface-elevated rounded mb-3 w-3/4" />
-                          <div className="h-4 bg-surface-elevated rounded mb-4 w-full" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <AIRecommendations items={aiRecommendations} tableNumber={tableNumber} />
-              )}
-            </section>
-          )}
+        {/* Search / Filtered Dishes */}
+        {searchQuery.trim() ? (
+          <section className="mt-10">
+            <div className="mb-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--accent-gold)]">
+                Search
+              </p>
 
-          {/* Promo Cards */}
-          {!searchQuery && (
-            <section id="offers" aria-label="Special offers">
-              <PromoCard />
-            </section>
-          )}
-
-          {/* Full Menu */}
-          <section id="menu" aria-label="Full menu">
-            <div className="mb-6">
-              <h2 className="text-2xl font-display font-bold text-white">
-                {searchQuery ? `Search results for "${searchQuery}"` : 'Full Menu'}
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
+                Search Results
               </h2>
-              <p className="text-text-secondary text-sm mt-1">
-                {menuItems.length} {menuItems.length === 1 ? 'item' : 'items'} available
+
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                Showing results for "{searchQuery}"
               </p>
             </div>
 
-            {!searchQuery && (
-              <CategoryNavigation
-                categories={categories}
-                activeCategoryId={activeCategoryId}
-                onSelectCategory={setActiveCategoryId}
-              />
+            <FoodGrid category={activeCategory} searchQuery={searchQuery} />
+          </section>
+        ) : (
+          <>
+            {/* Main Menu */}
+            <section className="mt-10">
+              <div className="mb-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--accent-gold)]">
+                  {activeCategory === 'All' ? 'Explore' : activeCategory}
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
+                  {activeCategory === 'All' ? 'Our Menu' : `${activeCategory} Selection`}
+                </h2>
+
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  {activeCategory === 'All'
+                    ? 'Discover something delicious from Silver Sapoon.'
+                    : `Finest ${activeCategory.toLowerCase()} prepared fresh by our culinary team.`}
+                </p>
+              </div>
+
+              <FoodGrid category={activeCategory} />
+            </section>
+
+            {/* Exclusive Offers Banner */}
+            {activeCategory === 'All' && (
+              <section className="mt-14">
+                <div className="overflow-hidden rounded-3xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6 sm:p-8 relative">
+                  <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--accent-orange)]/5 rounded-full blur-3xl pointer-events-none" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--accent-orange)]">
+                    Silver Sapoon
+                  </p>
+
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-[var(--text-primary)] sm:text-3xl">
+                    Exclusive Dining Experience
+                  </h2>
+
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+                    Enjoy contactless table ordering, personalized recommendations from our AI chef, and real-time live kitchen tracking.
+                  </p>
+                </div>
+              </section>
             )}
+          </>
+        )}
 
-            <FoodGrid items={menuItems} loading={isMenuLoading} />
-          </section>
-
-          {/* Footer info */}
-          <section id="about" aria-label="Restaurant info">
-            <BottomInfoBar />
-          </section>
-        </main>
+        {/* Bottom information */}
+        <section className="mt-12">
+          <BottomInfoBar />
+        </section>
       </div>
-
-      {/* Global overlays */}
-      <CartDrawer />
-
-      {/* Floating AI assistant */}
-      <FloatingAIAssistant />
-    </div>
+    </CustomerLayout>
   );
 }

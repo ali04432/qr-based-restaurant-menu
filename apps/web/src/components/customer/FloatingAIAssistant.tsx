@@ -1,258 +1,554 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Bot, Loader2, Sparkles } from 'lucide-react';
+import React, {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
+import {
+  Bot,
+  ChevronDown,
+  Loader2,
+  Send,
+  Sparkles,
+  X,
+} from 'lucide-react';
+
 import { aiService } from '../../services/ai.service';
 import { useTableContext } from '../../context/TableContext';
 
-// Quick Auto-writing suggestions
-const QUICK_SUGGESTIONS = [
-  'What are the special offers?',
-  'Recommend a good burger',
-  'Show me drinks menu',
-  'What is the prep time?'
+interface Message {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+const QUICK_ACTIONS = [
+  'Recommend something',
+  'Best food under Rs. 1000',
+  'Show spicy dishes',
+  'What goes well with my order?',
+  "What's popular today?",
 ];
 
+const REQUEST_COOLDOWN = 2500;
+
+function getFallbackResponse(
+  message: string
+): string {
+  const text = message.toLowerCase();
+
+  if (
+    text.includes('under rs') ||
+    text.includes('under 1000') ||
+    text.includes('budget')
+  ) {
+    return 'For a budget-friendly choice, I recommend checking popular dishes around your price range. I can help narrow it down by category too.';
+  }
+
+  if (
+    text.includes('spicy') ||
+    text.includes('hot')
+  ) {
+    return 'For spicy food, check the dishes marked as spicy. Tell me whether you prefer chicken, BBQ, pizza, or something lighter.';
+  }
+
+  if (
+    text.includes('pizza')
+  ) {
+    return 'For pizza, I recommend choosing one of the popular house pizzas and pairing it with a refreshing drink.';
+  }
+
+  if (
+    text.includes('burger')
+  ) {
+    return 'A signature burger with fries is a great choice. I can also suggest something lighter if you prefer.';
+  }
+
+  if (
+    text.includes('popular') ||
+    text.includes('trending')
+  ) {
+    return 'The best place to start is the Trending section, where popular menu items can be discovered quickly.';
+  }
+
+  if (
+    text.includes('pair') ||
+    text.includes('goes well') ||
+    text.includes('with my order')
+  ) {
+    return 'I can help pair your meal with sides, drinks, or desserts. Tell me what you have already added to your order.';
+  }
+
+  if (
+    text.includes('offer') ||
+    text.includes('discount') ||
+    text.includes('deal')
+  ) {
+    return 'Check the Offers section for currently available promotions.';
+  }
+
+  if (
+    text === 'hi' ||
+    text === 'hello' ||
+    text === 'hey'
+  ) {
+    return 'Hello. I am your Silver Sapoon AI Chef. Tell me your craving, budget, or spice preference.';
+  }
+
+  return 'I can help you choose food based on your taste, budget, spice preference, popular items, and meal pairings.';
+}
+
 export function FloatingAIAssistant() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: 'Hello! I am your AI Chef. How can I help you with your order today?' }
-  ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { restaurantId, tableNumber } =
+    useTableContext();
 
-  const { restaurantId, tableNumber } = useTableContext();
+  const [isOpen, setIsOpen] =
+    useState(false);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const [input, setInput] =
+    useState('');
 
+  const [loading, setLoading] =
+    useState(false);
+
+  const [messages, setMessages] =
+    useState<Message[]>([
+      {
+        role: 'assistant',
+        text:
+          'Hello. I am your Silver Sapoon AI Chef. How can I help you choose something delicious?',
+      },
+    ]);
+
+  const [lastRequestTime, setLastRequestTime] =
+    useState(0);
+
+  const messagesContainerRef =
+    useRef<HTMLDivElement>(null);
+
+  /*
+   * Open cart from header/sidebar.
+   * CartDrawer can listen to this global event.
+   */
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    const handleOpenAI = () => {
+      setIsOpen(true);
+    };
 
-  // Typewriter Auto-Writing Effect
-  const appendBotMessageWithTyping = (fullText: string) => {
-    let currentText = '';
-    let index = 0;
+    window.addEventListener(
+      'customer:ai-open',
+      handleOpenAI
+    );
 
-    setMessages((prev) => [...prev, { role: 'assistant', text: '' }]);
+    return () => {
+      window.removeEventListener(
+        'customer:ai-open',
+        handleOpenAI
+      );
+    };
+  }, []);
 
-    const interval = setInterval(() => {
-      if (index < fullText.length) {
-        currentText += fullText.charAt(index);
-        index++;
-        setMessages((prev) => {
-          const newArr = [...prev];
-          newArr[newArr.length - 1] = { role: 'assistant', text: currentText };
-          return newArr;
-        });
-      } else {
-        clearInterval(interval);
-      }
-    }, 18);
-  };
+  /*
+   * Keep the latest message visible.
+   */
+  useEffect(() => {
+    const container =
+      messagesContainerRef.current;
 
-  const handleSend = async (customText?: string) => {
-    const userText = (customText || input).trim();
-    if (!userText || isLoading) return;
+    if (!container) return;
 
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages, loading]);
+
+  const sendMessage = async (
+    messageOverride?: string
+  ) => {
+    const message = (
+      messageOverride ?? input
+    ).trim();
+
+    if (!message || loading) {
+      return;
+    }
+
+    const now = Date.now();
+
+    if (
+      now - lastRequestTime <
+      REQUEST_COOLDOWN
+    ) {
+      return;
+    }
+
+    setLastRequestTime(now);
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', text: userText }]);
-    setIsLoading(true);
+
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'user',
+        text: message,
+      },
+    ]);
+
+    setLoading(true);
 
     try {
-      // Safe dynamic API call with fallback
-      let replyText = '';
-      const service = aiService as unknown as Record<string, Function>;
+      /*
+       * We intentionally support multiple service method
+       * shapes so the assistant remains compatible with
+       * the existing AI service implementation.
+       */
+      const service =
+        aiService as unknown as Record<
+          string,
+          unknown
+        >;
 
-      if (typeof service.chatWithAI === 'function') {
-        const res = await service.chatWithAI({
-          message: userText,
-          restaurantId: restaurantId ?? '1',
-          tableNumber: tableNumber ?? 'takeaway'
-        });
-        replyText = res?.reply || res?.message || '';
-      } else if (typeof service.chat === 'function') {
-        const res = await service.chat(userText);
-        replyText = res?.reply || res?.message || '';
+      let responseText = '';
+
+      if (
+        typeof service.getRecommendations ===
+        'function'
+      ) {
+        const response =
+          await (
+            service.getRecommendations as (
+              input: string
+            ) => Promise<unknown>
+          )(message);
+
+        if (
+          typeof response ===
+          'string'
+        ) {
+          responseText = response;
+        } else if (
+          response &&
+          typeof response === 'object'
+        ) {
+          const result =
+            response as Record<
+              string,
+              unknown
+            >;
+
+          responseText = String(
+            result.reply ??
+            result.message ??
+            result.text ??
+            ''
+          );
+        }
       }
 
-      setIsLoading(false);
+      if (
+        !responseText &&
+        typeof service.chat ===
+        'function'
+      ) {
+        const response =
+          await (
+            service.chat as (
+              message: string
+            ) => Promise<unknown>
+          )(message);
 
-      if (replyText) {
-        appendBotMessageWithTyping(replyText);
-      } else {
-        const fallback = generateSmartResponse(userText);
-        appendBotMessageWithTyping(fallback);
+        if (
+          typeof response ===
+          'string'
+        ) {
+          responseText = response;
+        } else if (
+          response &&
+          typeof response === 'object'
+        ) {
+          const result =
+            response as Record<
+              string,
+              unknown
+            >;
+
+          responseText = String(
+            result.reply ??
+            result.message ??
+            result.text ??
+            ''
+          );
+        }
       }
-    } catch {
-      setIsLoading(false);
-      const fallback = generateSmartResponse(userText);
-      appendBotMessageWithTyping(fallback);
+
+      if (
+        !responseText &&
+        typeof service.chatWithAI ===
+        'function'
+      ) {
+        const response =
+          await (
+            service.chatWithAI as (
+              payload: {
+                message: string;
+                restaurantId: string;
+                tableNumber: string;
+              }
+            ) => Promise<unknown>
+          )({
+            message,
+            restaurantId:
+              restaurantId
+                ? String(
+                  restaurantId
+                )
+                : '',
+            tableNumber:
+              tableNumber
+                ? String(
+                  tableNumber
+                )
+                : '',
+          });
+
+        if (
+          typeof response ===
+          'string'
+        ) {
+          responseText = response;
+        } else if (
+          response &&
+          typeof response === 'object'
+        ) {
+          const result =
+            response as Record<
+              string,
+              unknown
+            >;
+
+          responseText = String(
+            result.reply ??
+            result.message ??
+            result.text ??
+            ''
+          );
+        }
+      }
+
+      /*
+       * Graceful fallback if AI service is unavailable
+       * or returns no usable text.
+       */
+      if (!responseText) {
+        responseText =
+          getFallbackResponse(
+            message
+          );
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          text: responseText,
+        },
+      ]);
+    } catch (error) {
+      console.error(
+        '[AI Assistant] Request failed:',
+        error
+      );
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          text:
+            'I am having trouble connecting to the AI service right now, but I can still help with basic menu recommendations.',
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredSuggestions = input.trim()
-    ? QUICK_SUGGESTIONS.filter((s) => s.toLowerCase().includes(input.toLowerCase()))
-    : QUICK_SUGGESTIONS;
+  const submitMessage = (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    void sendMessage();
+  };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-      {/* Chat Popup Modal */}
+    <div className="fixed bottom-5 right-5 z-[100] sm:bottom-6 sm:right-6">
+      {/* Chat panel */}
       {isOpen && (
-        <div className="mb-4 w-80 sm:w-96 h-[460px] bg-zinc-950/95 border border-amber-500/40 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] backdrop-blur-xl flex flex-col overflow-hidden animate-slide-up">
-          {/* Header */}
-          <div className="p-4 bg-zinc-900/80 border-b border-zinc-800 flex items-center justify-between">
+        <div className="mb-4 flex h-[520px] w-[calc(100vw-32px)] max-w-[390px] flex-col overflow-hidden rounded-3xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/95 shadow-2xl backdrop-blur-2xl">
+          {/* Chat header */}
+          <div className="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-amber-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--accent-purple)]/25 bg-[var(--accent-purple)]/10">
+                <Sparkles className="h-5 w-5 text-[var(--accent-purple)]" />
               </div>
+
               <div>
-                <h4 className="text-sm font-bold text-white">AI Chef Assistant</h4>
-                <p className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Online
-                </p>
+                <div className="text-sm font-bold text-[var(--text-primary)]">
+                  AI Chef Assistant
+                </div>
+
+                <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-emerald-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Ready to help
+                </div>
               </div>
             </div>
+
             <button
-              onClick={() => setIsOpen(false)}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              type="button"
+              onClick={() =>
+                setIsOpen(false)
+              }
+              aria-label="Close AI assistant"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Messages Container */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar text-xs">
-            {messages.map((m, idx) => (
-              <div
-                key={idx}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] p-3 rounded-2xl leading-relaxed ${m.role === 'user'
-                      ? 'bg-amber-500 text-black font-semibold'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
-                    }`}
-                >
-                  {m.text}
-                  {m.role === 'assistant' && m.text === '' && (
-                    <span className="animate-pulse">...</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isLoading && (
+          {/* Messages */}
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 space-y-3 overflow-y-auto px-4 py-4 custom-scrollbar"
+          >
+            {messages.map(
+              (message, index) => {
+                const isUser =
+                  message.role ===
+                  'user';
+
+                return (
+                  <div
+                    key={`${message.role}-${index}`}
+                    className={[
+                      'flex',
+                      isUser
+                        ? 'justify-end'
+                        : 'justify-start',
+                    ].join(' ')}
+                  >
+                    <div
+                      className={[
+                        'max-w-[88%] rounded-2xl px-3.5 py-3 text-xs leading-relaxed',
+                        isUser
+                          ? 'bg-[var(--accent-gold)] font-semibold text-black'
+                          : 'border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)]',
+                      ].join(' ')}
+                    >
+                      {message.text}
+                    </div>
+                  </div>
+                );
+              }
+            )}
+
+            {loading && (
               <div className="flex justify-start">
-                <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-2xl flex items-center gap-2 text-zinc-400">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>AI Chef is typing...</span>
+                <div className="flex items-center gap-2 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] px-3.5 py-3 text-xs text-[var(--text-muted)]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-gold)]" />
+                  Thinking...
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
-          {/* Auto-suggestions chips */}
-          <div className="px-3 py-2 border-t border-zinc-800/80 bg-zinc-950 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            {filteredSuggestions.map((suggestion, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSend(suggestion)}
-                className="whitespace-nowrap px-2.5 py-1 bg-zinc-900 hover:bg-amber-500/20 border border-zinc-800 hover:border-amber-500/40 text-[11px] text-zinc-300 hover:text-amber-300 rounded-full transition-all shrink-0"
-              >
-                {suggestion}
-              </button>
-            ))}
+          {/* Quick actions */}
+          <div className="border-t border-[var(--border-color)] px-3 py-3">
+            <div className="mb-2 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              <Sparkles className="h-3 w-3 text-[var(--accent-gold)]" />
+              Quick actions
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {QUICK_ACTIONS.map(
+                (action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    disabled={loading}
+                    onClick={() =>
+                      void sendMessage(
+                        action
+                      )
+                    }
+                    className="whitespace-nowrap rounded-full border border-[var(--border-color)] bg-[var(--bg-card)] px-3 py-1.5 text-[10px] font-medium text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {action}
+                  </button>
+                )
+              )}
+            </div>
           </div>
 
-          {/* Input form */}
-          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-3 border-t border-zinc-800 bg-zinc-900/50 flex gap-2">
+          {/* Input */}
+          <form
+            onSubmit={submitMessage}
+            className="flex gap-2 border-t border-[var(--border-color)] p-3"
+          >
             <input
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything about menu or offers..."
-              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              disabled={loading}
+              onChange={(event) =>
+                setInput(event.target.value)
+              }
+              placeholder="Ask about the menu..."
+              aria-label="Ask AI about the menu"
+              className="min-w-0 flex-1 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-3.5 py-2.5 text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent-gold)]/40"
             />
+
             <button
               type="submit"
-              disabled={isLoading}
-              className="p-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black rounded-xl transition-all"
+              disabled={
+                loading ||
+                !input.trim()
+              }
+              aria-label="Send message"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-gold)] text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Send className="w-4 h-4" />
+              <Send className="h-4 w-4" />
             </button>
           </form>
         </div>
       )}
 
-      {/* Floating Button */}
-      {!isOpen && (
-        <div className="mb-2 px-3 py-1.5 bg-zinc-900/90 border border-amber-500/40 rounded-xl text-xs text-amber-300 font-semibold shadow-[0_0_15px_rgba(245,158,11,0.2)] backdrop-blur-md animate-bounce flex items-center gap-1.5">
-          <span>Hi! Need help?</span>
-        </div>
-      )}
-
+      {/* Floating trigger */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative w-14 h-14 rounded-full bg-zinc-900 border-2 border-amber-500/50 p-1 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:scale-110 active:scale-95 transition-all duration-300 group overflow-hidden"
+        onClick={() =>
+          setIsOpen(
+            (current) => !current
+          )
+        }
+        aria-label={
+          isOpen
+            ? 'Close AI assistant'
+            : 'Open AI assistant'
+        }
+        className="group relative flex h-14 w-14 items-center justify-center rounded-full border border-[var(--accent-purple)]/40 bg-[var(--bg-secondary)] text-[var(--accent-purple)] shadow-[0_0_28px_rgba(139,92,246,0.22)] transition-all duration-300 hover:scale-105 active:scale-95"
       >
-        <span className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping pointer-events-none" />
+        {isOpen ? (
+          <ChevronDown className="h-6 w-6" />
+        ) : (
+          <Bot className="h-7 w-7" />
+        )}
 
-        {/* 3D Glowing AI Robot Vector */}
-        <svg
-          className="w-8 h-8 text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.8)] relative z-10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="11" width="18" height="10" rx="2" fill="#451a03" />
-          <circle cx="12" cy="5" r="2" fill="#f59e0b" />
-          <path d="M12 7v4" />
-          <line x1="8" y1="15" x2="8" y2="15.01" strokeWidth="3" stroke="#f59e0b" />
-          <line x1="16" y1="15" x2="16" y2="15.01" strokeWidth="3" stroke="#f59e0b" />
-          <path d="M9 18h6" stroke="#f59e0b" />
-        </svg>
-
-        <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-zinc-950 z-20" />
+        <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full border-2 border-[var(--bg-secondary)] bg-emerald-500" />
       </button>
     </div>
   );
-}
-
-// Smart Intent Handler for Offline / Fallback Responses
-function generateSmartResponse(input: string): string {
-  const text = input.toLowerCase();
-
-  if (text.includes('hi') || text.includes('hlo') || text.includes('hello') || text.includes('hey')) {
-    return 'Hello! 👋 How can I assist you today? Are you looking for food recommendations, special offers, or drinks?';
-  }
-  if (text.includes('burger') || text.includes('fast food')) {
-    return 'Our top burger is the Double Smoked Bacon Cheeseburger! Would you like to add fries or a drink with it?';
-  }
-  if (text.includes('steak') || text.includes('meat') || text.includes('wagyu')) {
-    return 'I highly recommend our Pan-Seared Wagyu Steak served with truffle butter and roasted vegetables!';
-  }
-  if (text.includes('offer') || text.includes('discount') || text.includes('deal') || text.includes('special')) {
-    return 'We currently have Happy Hour 2-for-1 cocktails from 5 PM - 7 PM, and 20% OFF on Wagyu Steak pairings!';
-  }
-  if (text.includes('drink') || text.includes('cocktail') || text.includes('beverage')) {
-    return 'Check out our Signature Smoked Old Fashioned or Classic Mojito in the Drinks section!';
-  }
-  if (text.includes('prep time') || text.includes('time') || text.includes('kab tak')) {
-    return 'Most dishes take around 15 to 20 minutes of preparation time.';
-  }
-
-  return `Thanks for asking! Regarding "${input}", I can help you find dishes based on your dietary preferences, spice levels, or budget. What type of food are you craving right now?`;
 }
 
 export default FloatingAIAssistant;

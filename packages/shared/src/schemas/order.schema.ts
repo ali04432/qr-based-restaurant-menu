@@ -22,6 +22,11 @@ const paymentMethodSchema = z.enum(['CASH', 'CARD', 'ONLINE']);
 export const customerOrderSchema = z.object({
   restaurantId: z.string().min(1, 'restaurantId is required'),
   tableId: z.string().min(1, 'tableId is required'),
+  branchId: z.string().optional().nullable(),
+  customerPhone: z.string().optional().nullable(),
+  loyaltyAccountId: z.string().optional().nullable(),
+  rewardCode: z.string().optional().nullable(),
+  promoCode: z.string().optional().nullable(),
   items: z
     .array(orderItemSchema)
     .min(1, 'Order must contain at least one item')

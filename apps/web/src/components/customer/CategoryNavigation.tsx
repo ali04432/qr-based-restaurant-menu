@@ -1,70 +1,84 @@
-import React, { useRef } from 'react';
-import { MenuCategory } from '@qr-menu/shared';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { menuService } from '../../services/menu.service';
+import { useTableContext } from '../../context/TableContext';
 
 interface CategoryNavigationProps {
-  categories: MenuCategory[];
-  activeCategoryId: string;
-  onSelectCategory: (categoryId: string) => void;
+  categories?: Array<{ id: string; name: string }>;
+  activeCategory?: string;
+  onSelectCategory?: (category: string) => void;
 }
 
-export function CategoryNavigation({ categories, activeCategoryId, onSelectCategory }: CategoryNavigationProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+export default function CategoryNavigation({
+  categories: initialCategories,
+  activeCategory = 'All',
+  onSelectCategory,
+}: CategoryNavigationProps) {
+  const { restaurantId } = useTableContext();
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>(
+    initialCategories || []
+  );
 
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const scrollAmount = direction === 'left' ? -200 : 200;
-      scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      setCategories(initialCategories);
+      return;
     }
-  };
+
+    let isMounted = true;
+    menuService.getCategories(restaurantId || undefined).then((cats) => {
+      if (isMounted && cats.length > 0) {
+        setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurantId, initialCategories]);
+
+  const defaultList = [
+    { id: 'cat-all', name: 'All' },
+    { id: 'cat-main', name: 'Main Courses' },
+    { id: 'cat-pizza', name: 'Pizza' },
+    { id: 'cat-burgers', name: 'Burgers' },
+    { id: 'cat-bbq', name: 'BBQ & Grills' },
+    { id: 'cat-pasta', name: 'Pasta' },
+    { id: 'cat-rice', name: 'Rice' },
+    { id: 'cat-app', name: 'Appetizers' },
+    { id: 'cat-drinks', name: 'Drinks' },
+    { id: 'cat-desserts', name: 'Desserts' },
+    { id: 'cat-specials', name: "Chef's Specials" },
+  ];
+
+  const listToRender = categories.length > 0 ? categories : defaultList;
+  const hasAll = listToRender.some((c) => c.name.toLowerCase() === 'all');
+  const allCategories = hasAll ? listToRender : [{ id: 'cat-all', name: 'All' }, ...listToRender];
 
   return (
-    <div className="relative flex items-center mb-8 group">
-      {/* Scroll Left Button */}
-      <button 
-        onClick={() => scroll('left')}
-        className="absolute left-0 z-10 w-8 h-8 flex items-center justify-center bg-bg-page/80 backdrop-blur-sm border border-[var(--border-color)] rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
-      >
-        &#8592;
-      </button>
-
-      {/* Categories */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-x-auto no-scrollbar py-2 px-6 sm:px-10 flex items-center gap-3"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {categories.map((category) => {
-          const isActive = activeCategoryId === category.id;
-          return (
-            <button
-              key={category.id}
-              onClick={() => onSelectCategory(category.id)}
-              className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 border ${
-                isActive 
-                  ? 'bg-brand-500 text-white border-brand-500 shadow-glow' 
-                  : 'bg-surface-elevated text-text-secondary border-[var(--border-color)] hover:bg-surface-muted hover:text-white'
-              }`}
-            >
-              {category.name}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Scroll Right Button */}
-      <button 
-        onClick={() => scroll('right')}
-        className="absolute right-12 z-10 w-8 h-8 flex items-center justify-center bg-bg-page/80 backdrop-blur-sm border border-[var(--border-color)] rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
-      >
-        &#8594;
-      </button>
-
-      {/* Filter Button */}
-      <div className="absolute right-0 pl-4 bg-gradient-to-l from-bg-page via-bg-page to-transparent z-10">
-        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-surface-elevated border border-[var(--border-color)] text-white hover:text-brand-400 hover:border-brand-500/50 transition-colors">
-          ⚙️
-        </button>
-      </div>
+    <div className="flex items-center gap-3 mb-8 overflow-x-auto no-scrollbar py-1">
+      {allCategories.map((cat) => {
+        const isActive = activeCategory.toLowerCase() === cat.name.toLowerCase();
+        return (
+          <button
+            key={cat.id}
+            onClick={() => {
+              if (onSelectCategory) onSelectCategory(cat.name);
+            }}
+            className={`
+              px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200
+              ${
+                isActive
+                  ? 'bg-[var(--accent-gold)] text-black font-bold shadow-lg shadow-[var(--accent-gold)]/20 scale-[1.02]'
+                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] hover:border-[var(--accent-gold)]/30'
+              }
+            `}
+          >
+            {cat.name}
+          </button>
+        );
+      })}
     </div>
   );
 }

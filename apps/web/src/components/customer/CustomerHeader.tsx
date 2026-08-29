@@ -1,159 +1,243 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { Search, QrCode, ShoppingBag, Sun, Moon } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import Link from 'next/link';
+import {
+  Bell,
+  Menu,
+  Search,
+  ShoppingCart,
+  Sun,
+  Moon,
+  User,
+  X,
+  MapPin,
+} from 'lucide-react';
+
 import { useTableContext } from '../../context/TableContext';
-import { useCartContext } from '../../context/CartContext';
 import { useThemeContext } from '../../context/ThemeContext';
+import { useCartContext } from '../../context/CartContext';
 
 interface CustomerHeaderProps {
   onSearch?: (query: string) => void;
-  onOpenScanQR?: () => void;
 }
 
-export function CustomerHeader({ onSearch, onOpenScanQR }: CustomerHeaderProps) {
+export function CustomerHeader({
+  onSearch,
+}: CustomerHeaderProps) {
   const { tableNumber } = useTableContext();
-  const { items, openDrawer } = useCartContext();
   const { theme, toggleTheme } = useThemeContext();
+  const { items } = useCartContext();
+
   const [searchValue, setSearchValue] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] =
+    useState(false);
+  const [notificationCount, setNotificationCount] =
+    useState(0);
+
+  const cartItemCount = items.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
+
+  const formattedTable =
+    tableNumber &&
+      String(tableNumber).length === 1
+      ? `0${tableNumber}`
+      : tableNumber || '--';
 
   const handleSearch = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const q = e.target.value;
-      setSearchValue(q);
-      onSearch?.(q);
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value;
+
+      setSearchValue(value);
+      onSearch?.(value);
     },
     [onSearch]
   );
 
-  // Smooth Scroll Handler for Navigation Links
-  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    e.preventDefault();
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const openSidebar = () => {
+    window.dispatchEvent(
+      new CustomEvent('customer:sidebar-open')
+    );
   };
 
-  const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+  const openCart = () => {
+    /*
+     * We intentionally avoid depending on a specific
+     * CartContext drawer method because your local
+     * CartContext API differs from the repository snapshot.
+     *
+     * CartDrawer can listen to this event globally.
+     */
+    window.dispatchEvent(
+      new CustomEvent('customer:cart-open')
+    );
+  };
+
+  const openNotifications = () => {
+    setNotificationCount(0);
+
+    window.dispatchEvent(
+      new CustomEvent(
+        'customer:notifications-open'
+      )
+    );
+  };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#0c0c0e]/80 [data-theme=light]:bg-white/85 backdrop-blur-md border-b border-zinc-800/50 [data-theme=light]:border-slate-200 px-4 sm:px-8 py-3 flex items-center justify-between transition-all">
+    <header className="sticky top-0 z-40 border-b border-[var(--border-color)] bg-[var(--bg-page)]/90 backdrop-blur-xl">
+      <div className="flex h-[72px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+        {/* Mobile sidebar */}
+        <button
+          type="button"
+          onClick={openSidebar}
+          aria-label="Open navigation menu"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)] lg:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
 
-      {/* Mobile Branding */}
-      <div className="lg:hidden flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-black font-bold text-lg shadow-[0_0_10px_rgba(245,158,11,0.3)]">
-          L
-        </div>
-        <span className="font-display font-bold text-white [data-theme=light]:text-slate-900 tracking-wide">LUMIÈRE</span>
-      </div>
+        {/* Search */}
+        <div className="hidden min-w-0 flex-1 md:block">
+          <div className="relative max-w-xl">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
 
-      {/* Table Context Badge */}
-      <div className="hidden lg:flex items-center gap-2">
-        {tableNumber ? (
-          <div className="bg-zinc-900/80 [data-theme=light]:bg-amber-50 border border-amber-500/30 py-1.5 px-3.5 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-            <span className="text-xs font-semibold text-amber-300 [data-theme=light]:text-amber-700">Table {tableNumber}</span>
+            <input
+              type="search"
+              value={searchValue}
+              onChange={handleSearch}
+              placeholder="Search food, dishes, flavors..."
+              aria-label="Search menu"
+              className="h-11 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] pl-11 pr-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] transition focus:border-[var(--accent-gold)]/40 focus:ring-2 focus:ring-[var(--accent-gold)]/10"
+            />
           </div>
-        ) : (
-          <div className="bg-zinc-900/60 [data-theme=light]:bg-slate-100 border border-zinc-800 [data-theme=light]:border-slate-200 py-1.5 px-3.5 rounded-full flex items-center gap-2">
-            <span className="text-xs font-medium text-zinc-400 [data-theme=light]:text-slate-600">Takeaway / Browsing</span>
-          </div>
-        )}
-      </div>
-
-      {/* Functional Navigation Links */}
-      <nav className="hidden md:flex items-center gap-8">
-        <a
-          href="#menu"
-          onClick={(e) => scrollToSection(e, 'menu')}
-          className="text-xs font-medium text-zinc-200 [data-theme=light]:text-slate-700 hover:text-amber-400 [data-theme=light]:hover:text-amber-600 transition-colors tracking-wide cursor-pointer"
-        >
-          Menu
-        </a>
-        <a
-          href="#offers"
-          onClick={(e) => scrollToSection(e, 'offers')}
-          className="text-xs font-medium text-zinc-400 [data-theme=light]:text-slate-500 hover:text-amber-400 [data-theme=light]:hover:text-amber-600 transition-colors tracking-wide cursor-pointer"
-        >
-          Offers
-        </a>
-        <a
-          href="#reviews"
-          onClick={(e) => scrollToSection(e, 'reviews')}
-          className="text-xs font-medium text-zinc-400 [data-theme=light]:text-slate-500 hover:text-amber-400 [data-theme=light]:hover:text-amber-600 transition-colors tracking-wide cursor-pointer"
-        >
-          Reviews
-        </a>
-        <a
-          href="#about"
-          onClick={(e) => scrollToSection(e, 'about')}
-          className="text-xs font-medium text-zinc-400 [data-theme=light]:text-slate-500 hover:text-amber-400 [data-theme=light]:hover:text-amber-600 transition-colors tracking-wide cursor-pointer"
-        >
-          About Us
-        </a>
-      </nav>
-
-      {/* Right Controls */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5">
-        {/* Search Input */}
-        <div className="relative hidden sm:flex items-center">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none stroke-[1.5]" />
-          <input
-            type="text"
-            value={searchValue}
-            onChange={handleSearch}
-            placeholder="Search dish..."
-            aria-label="Search menu"
-            className="w-48 lg:w-64 pl-10 pr-4 py-2 bg-zinc-900/90 [data-theme=light]:bg-slate-100 border border-zinc-800/80 [data-theme=light]:border-slate-200 text-zinc-200 [data-theme=light]:text-slate-800 placeholder-zinc-500 text-xs rounded-full focus:border-amber-500/50 outline-none transition-all"
-          />
         </div>
 
-        {/* Scan QR */}
-        <button
-          onClick={onOpenScanQR}
-          type="button"
-          className="hidden sm:flex items-center gap-2 text-xs font-medium text-zinc-300 [data-theme=light]:text-slate-700 hover:text-amber-300 bg-zinc-900/60 [data-theme=light]:bg-slate-100 border border-zinc-800 [data-theme=light]:border-slate-200 rounded-full px-3.5 py-2 transition-all hover:border-amber-500/40"
-        >
-          <QrCode className="w-4 h-4 text-amber-400 stroke-[1.5]" />
-          <span className="hidden lg:inline">Scan QR</span>
-        </button>
+        {/* Actions */}
+        <div className="ml-auto flex items-center gap-2">
+          {/* Mobile search */}
+          <button
+            type="button"
+            onClick={() =>
+              setMobileSearchOpen(
+                (current) => !current
+              )
+            }
+            aria-label={
+              mobileSearchOpen
+                ? 'Close search'
+                : 'Open search'
+            }
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)] md:hidden"
+          >
+            {mobileSearchOpen ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+          </button>
 
-        {/* Theme Toggle Button (Light/Dark Mode) */}
-        <button
-          onClick={toggleTheme}
-          type="button"
-          aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          className="p-2 rounded-full border border-zinc-800/80 [data-theme=light]:border-slate-300 bg-zinc-900/70 [data-theme=light]:bg-slate-100 text-zinc-300 [data-theme=light]:text-slate-700 hover:text-amber-400 [data-theme=light]:hover:text-amber-600 hover:border-amber-500/40 transition-all flex items-center justify-center active:scale-95"
-        >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-amber-400 stroke-[1.5]" />
-          ) : (
-            <Moon className="w-4 h-4 text-amber-600 stroke-[1.5]" />
-          )}
-        </button>
+          {/* Table */}
+          <div className="hidden h-10 items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-3 sm:flex">
+            <MapPin className="h-4 w-4 text-[var(--accent-gold)]" />
 
-        {/* Cart Button */}
-        <button
-          onClick={openDrawer}
-          type="button"
-          className="relative flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold text-xs rounded-full px-4 py-2 shadow-[0_0_12px_rgba(245,158,11,0.25)] transition-all active:scale-95"
-        >
-          <ShoppingBag className="w-4 h-4 text-black stroke-[1.5]" />
-          <span className="hidden sm:inline">Cart</span>
-          {cartItemCount > 0 && (
-            <span className="ml-1 bg-black text-amber-400 text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-              {cartItemCount}
-            </span>
-          )}
-        </button>
+            <div className="leading-none">
+              <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                Table
+              </div>
 
-        {/* Profile Avatar */}
-        <button className="w-8 h-8 rounded-full border border-amber-500/30 bg-zinc-900 [data-theme=light]:bg-slate-100 text-amber-400 font-semibold text-xs flex items-center justify-center hover:border-amber-500/60 transition-colors">
-          GU
-        </button>
+              <div className="mt-1 text-xs font-bold text-[var(--text-primary)]">
+                {formattedTable}
+              </div>
+            </div>
+          </div>
+
+          {/* Theme */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === 'dark'
+                ? 'light'
+                : 'dark'
+              } theme`}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]"
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </button>
+
+          {/* Notifications */}
+          <button
+            type="button"
+            onClick={openNotifications}
+            aria-label="Notifications"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]"
+          >
+            <Bell className="h-4 w-4" />
+
+            {notificationCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-[var(--bg-page)] bg-[var(--accent-orange)] px-1 text-[9px] font-bold text-white">
+                {notificationCount > 9
+                  ? '9+'
+                  : notificationCount}
+              </span>
+            )}
+          </button>
+
+          {/* Profile */}
+          <Link
+            href="/profile"
+            aria-label="Open profile"
+            className="hidden h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)] sm:flex"
+          >
+            <User className="h-4 w-4" />
+          </Link>
+
+          {/* Cart */}
+          <button
+            type="button"
+            onClick={openCart}
+            aria-label={`Open cart${cartItemCount > 0
+                ? ` with ${cartItemCount} items`
+                : ''
+              }`}
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] transition hover:border-[var(--accent-gold)]/50 hover:bg-[var(--accent-gold)]/15"
+          >
+            <ShoppingCart className="h-4 w-4" />
+
+            {cartItemCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-[var(--bg-page)] bg-[var(--accent-orange)] px-1 text-[9px] font-bold text-white">
+                {cartItemCount > 99
+                  ? '99+'
+                  : cartItemCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile search */}
+      {mobileSearchOpen && (
+        <div className="border-t border-[var(--border-color)] bg-[var(--bg-page)] px-4 py-3 md:hidden">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+
+            <input
+              autoFocus
+              type="search"
+              value={searchValue}
+              onChange={handleSearch}
+              placeholder="Search food..."
+              aria-label="Search menu"
+              className="h-11 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] pl-11 pr-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--accent-gold)]/40 focus:ring-2 focus:ring-[var(--accent-gold)]/10"
+            />
+          </div>
+        </div>
+      )}
     </header>
   );
 }

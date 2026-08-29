@@ -1,119 +1,237 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { CartItem, MenuItem } from '@qr-menu/shared';
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { MenuItem as SharedMenuItem } from "@qr-menu/shared";
 
-interface CartContextState {
-  items: CartItem[];
-  isDrawerOpen: boolean;
+export interface MenuItem {
+  id: string;
+  restaurantId?: string;
+  categoryId?: string;
+  name: string;
+  category?: string;
+  price: number;
+  description: string;
+  image?: string;
+  imageUrl?: string;
+  rating?: number;
+  badge?: string;
+  isSpicy?: boolean;
+  isChefSpecial?: boolean;
+  isAvailable?: boolean;
+  prepTime?: string;
+  prepTimeMin?: number;
+  prepTimeMax?: number;
+}
+
+export interface CartItem {
+  id?: string;
+  menuItem: MenuItem;
+  quantity: number;
+  specialInstructions?: string;
+}
+
+interface CartContextType {
+  cart: CartItem[];
+  tableNumber: string | null;
+  addToCart: (item: MenuItem, quantity?: number, specialInstructions?: string) => void;
+  removeFromCart: (itemId: string) => void;
+  updateQuantity: (itemId: string, delta: number) => void;
+  updateSpecialInstructions: (itemId: string, instructions: string) => void;
+  clearCart: () => void;
   subtotal: number;
   tax: number;
   serviceCharge: number;
-  total: number;
-  addItem: (item: MenuItem, quantity: number, specialInstructions?: string) => void;
-  updateQuantity: (itemId: string, quantity: number) => void;
-  removeItem: (itemId: string) => void;
-  clearCart: () => void;
+  grandTotal: number;
+  isCartOpen: boolean;
+  setIsCartOpen: (open: boolean) => void;
   openDrawer: () => void;
   closeDrawer: () => void;
+  favorites: string[];
+  toggleFavorite: (itemId: string) => void;
+
+  // Aliases for backward compatibility
+  items: CartItem[];
+  addItem: (item: MenuItem, quantity?: number, specialInstructions?: string) => void;
+  removeItem: (itemId: string) => void;
+  isDrawerOpen: boolean;
+  total: number;
 }
 
-const CartContext = createContext<CartContextState | undefined>(undefined);
+const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+const CART_STORAGE_KEY = "silver_sapoon_cart";
+const FAVORITES_STORAGE_KEY = "silver_sapoon_favorites";
 
-  // Load from local storage
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [tableNumber, setTableNumber] = useState<string | null>("07");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Load cart from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('qr_cart');
-    if (saved) {
+    if (typeof window !== "undefined") {
       try {
-        setItems(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse cart');
+        const storedCart = localStorage.getItem(CART_STORAGE_KEY);
+        if (storedCart) {
+          setCart(JSON.parse(storedCart));
+        }
+
+        const storedFavorites = localStorage.getItem(FAVORITES_STORAGE_KEY);
+        if (storedFavorites) {
+          setFavorites(JSON.parse(storedFavorites));
+        }
+
+        const storedTable = localStorage.getItem("qr_tableNumber");
+        if (storedTable) {
+          setTableNumber(storedTable);
+        }
+      } catch (err) {
+        console.error("Failed to load cart from storage:", err);
+      } finally {
+        setIsLoaded(true);
       }
     }
-    setIsInitialized(true);
   }, []);
 
-  // Save to local storage
+  // Save cart to localStorage on changes
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('qr_cart', JSON.stringify(items));
+    if (isLoaded && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      } catch (err) {
+        console.error("Failed to save cart to storage:", err);
+      }
     }
-  }, [items, isInitialized]);
+  }, [cart, isLoaded]);
 
-  const addItem = (menuItem: MenuItem, quantity: number, specialInstructions?: string) => {
-    setItems((prev) => {
-      // Check if item already exists with SAME special instructions
-      const existing = prev.find(
-        (i) => i.menuItem.id === menuItem.id && i.specialInstructions === specialInstructions
-      );
+  // Save favorites to localStorage on changes
+  useEffect(() => {
+    if (isLoaded && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+      } catch (err) {
+        console.error("Failed to save favorites to storage:", err);
+      }
+    }
+  }, [favorites, isLoaded]);
 
+  const addToCart = useCallback((item: MenuItem, quantity = 1, specialInstructions = "") => {
+    // Normalize image property
+    const normalizedItem: MenuItem = {
+      ...item,
+      image: item.image || item.imageUrl || "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=85",
+      category: item.category || "Main",
+      rating: item.rating ?? 4.8,
+      price: Number(item.price) || 0,
+    };
+
+    setCart((prev) => {
+      const existing = prev.find((i) => i.menuItem.id === item.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === existing.id ? { ...i, quantity: i.quantity + quantity } : i
+          i.menuItem.id === item.id
+            ? {
+                ...i,
+                quantity: i.quantity + quantity,
+                specialInstructions: specialInstructions || i.specialInstructions,
+              }
+            : i
         );
       }
-
       return [
         ...prev,
         {
-          id: Math.random().toString(36).substring(7),
-          menuItem,
+          id: `cart-${item.id}-${Date.now()}`,
+          menuItem: normalizedItem,
           quantity,
           specialInstructions,
         },
       ];
     });
-    setIsDrawerOpen(true);
-  };
+  }, []);
 
-  const updateQuantity = (itemId: string, quantity: number) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === itemId ? { ...i, quantity: Math.max(1, quantity) } : i))
+  const removeFromCart = useCallback((itemId: string) => {
+    setCart((prev) => prev.filter((i) => i.menuItem.id !== itemId));
+  }, []);
+
+  const updateQuantity = useCallback((itemId: string, delta: number) => {
+    setCart((prev) =>
+      prev
+        .map((i) => {
+          if (i.menuItem.id === itemId) {
+            const newQ = i.quantity + delta;
+            return newQ > 0 ? { ...i, quantity: newQ } : null;
+          }
+          return i;
+        })
+        .filter(Boolean) as CartItem[]
     );
-  };
+  }, []);
 
-  const removeItem = (itemId: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== itemId));
-  };
+  const updateSpecialInstructions = useCallback((itemId: string, instructions: string) => {
+    setCart((prev) =>
+      prev.map((i) =>
+        i.menuItem.id === itemId ? { ...i, specialInstructions: instructions } : i
+      )
+    );
+  }, []);
 
-  const clearCart = () => setItems([]);
+  const clearCart = useCallback(() => {
+    setCart([]);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(CART_STORAGE_KEY);
+    }
+  }, []);
 
-  const subtotal = items.reduce((acc, item) => acc + item.menuItem.price * item.quantity, 0);
-  const tax = subtotal * 0.08; // Example 8% tax
-  const serviceCharge = items.length > 0 ? 5.00 : 0; // Example flat service charge
-  const total = subtotal + tax + serviceCharge;
+  const toggleFavorite = useCallback((itemId: string) => {
+    setFavorites((prev) =>
+      prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    );
+  }, []);
+
+  const subtotal = cart.reduce((acc, item) => acc + (Number(item.menuItem.price) || 0) * item.quantity, 0);
+  const tax = Math.round(subtotal * 0.16);
+  const serviceCharge = subtotal > 0 ? 150 : 0;
+  const grandTotal = subtotal + tax + serviceCharge;
 
   return (
     <CartContext.Provider
       value={{
-        items,
-        isDrawerOpen,
+        cart,
+        tableNumber,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        updateSpecialInstructions,
+        clearCart,
         subtotal,
         tax,
         serviceCharge,
-        total,
-        addItem,
-        updateQuantity,
-        removeItem,
-        clearCart,
-        openDrawer: () => setIsDrawerOpen(true),
-        closeDrawer: () => setIsDrawerOpen(false),
+        grandTotal,
+        isCartOpen,
+        setIsCartOpen,
+        openDrawer: () => setIsCartOpen(true),
+        closeDrawer: () => setIsCartOpen(false),
+        favorites,
+        toggleFavorite,
+        items: cart,
+        addItem: addToCart,
+        removeItem: removeFromCart,
+        isDrawerOpen: isCartOpen,
+        total: grandTotal,
       }}
     >
       {children}
     </CartContext.Provider>
   );
-}
+};
 
-export function useCartContext() {
+export const useCart = () => {
   const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCartContext must be used within a CartProvider');
-  }
+  if (!context) throw new Error("useCart must be used within a CartProvider");
   return context;
-}
+};
+
+export const useCartContext = useCart;

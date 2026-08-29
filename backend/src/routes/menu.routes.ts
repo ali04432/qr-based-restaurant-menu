@@ -82,6 +82,40 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
+ * GET /api/menu/item/:id
+ * Public endpoint to fetch a single menu item by ID.
+ */
+router.get("/item/:id", async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const item = await prisma.menuItem.findUnique({
+      where: { id },
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            themeColor: true,
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      res.status(404).json({ error: "Menu item not found" });
+      return;
+    }
+
+    res.json(item);
+  } catch (err) {
+    console.error("GET /api/menu/item/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+/**
  * GET /api/menu/admin
  * Admin endpoint — returns ALL menu items (including unavailable) flat or grouped for authenticated restaurant.
  */

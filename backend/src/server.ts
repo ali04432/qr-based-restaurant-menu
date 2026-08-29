@@ -12,6 +12,7 @@ import tablesRouter from "./routes/tables.routes";
 import restaurantRouter from "./routes/restaurant.routes";
 import analyticsRouter from "./routes/analytics.routes";
 import aiRouter from "./routes/ai.routes";
+import feedbackRouter from "./routes/feedback.routes";
 
 // Load environment variables
 dotenv.config();
@@ -58,6 +59,8 @@ app.use("/api/menu", menuRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/feedback", feedbackRouter);
+
 
 // Health-check endpoint verifying PostgreSQL database connection
 app.get("/api/health", async (_req: Request, res: Response) => {

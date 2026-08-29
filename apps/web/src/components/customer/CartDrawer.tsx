@@ -1,233 +1,330 @@
-import React, { useState } from 'react';
-import { ShoppingBag, X, MapPin, UtensilsCrossed, Plus, Minus, Trash2, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { useCartContext } from '../../context/CartContext';
-import { useTableContext } from '../../context/TableContext';
-import { orderService } from '../../services/order.service';
+'use client';
 
-export function CartDrawer() {
-  const { isDrawerOpen, closeDrawer, items, updateQuantity, removeItem, clearCart, total } = useCartContext();
-  const { restaurantId, tableNumber } = useTableContext();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+import React from 'react';
+import Link from 'next/link';
+import {
+    Minus,
+    Plus,
+    ShoppingCart,
+    Trash2,
+    X,
+    ArrowRight,
+    ReceiptText,
+} from 'lucide-react';
 
-  if (!isDrawerOpen) return null;
+import { useCart } from '../../context/CartContext';
 
-  const handleCheckout = async () => {
-    if (items.length === 0) return;
-    setIsSubmitting(true);
-    setErrorMessage(null);
+export default function CartDrawer() {
+    const {
+        cart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        subtotal,
+        tax,
+        serviceCharge,
+        grandTotal,
+        isCartOpen,
+        closeDrawer,
+    } = useCart();
 
-    try {
-      const payloadItems = items.map((cartItem: any) => {
-        const item = cartItem.menuItem || cartItem;
-        const itemId = item.id || cartItem.id || cartItem.menuItemId || 'item-1';
-        const itemName = item.name || cartItem.name || 'Delicious Dish';
-        const itemPrice = Number(item.price || cartItem.price || 0);
-        return {
-          menuItemId: String(itemId),
-          name: itemName,
-          price: itemPrice,
-          quantity: Number(cartItem.quantity || 1),
-          specialInstructions: cartItem.specialInstructions || undefined,
-        };
-      });
-
-      const restId = restaurantId || '1';
-      const tblId = tableNumber ? `t-${tableNumber}` : 't-07';
-
-      await orderService.submitOrder({
-        restaurantId: restId,
-        tableId: tblId,
-        items: payloadItems,
-        paymentMethod: 'ONLINE',
-      });
-
-      setIsSubmitting(false);
-      setOrderPlaced(true);
-      setTimeout(() => {
-        clearCart();
-        setOrderPlaced(false);
-        closeDrawer();
-      }, 2000);
-    } catch (err: any) {
-      console.error('[CartDrawer] Error submitting order to backend API:', err);
-      setErrorMessage(err?.message || 'Failed to place order. Please try again.');
-      setIsSubmitting(false);
+    if (!isCartOpen) {
+        return null;
     }
-  };
 
-  return (
-    <div className="fixed inset-0 z-[100] overflow-hidden">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity"
-        onClick={closeDrawer}
-      />
+    const itemCount = cart.reduce(
+        (total, item) =>
+            total + item.quantity,
+        0
+    );
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col relative z-[101]">
-
-          {/* Header */}
-          <div className="p-5 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-                <ShoppingBag className="w-5 h-5 text-amber-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold text-white tracking-wide">
-                  Your Cart
-                </h2>
-                <p className="text-[10px] text-zinc-400">Review items before placing order</p>
-              </div>
-            </div>
-
+    return (
+        <>
+            {/* Backdrop */}
             <button
-              onClick={closeDrawer}
-              className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Location Banner */}
-          <div className="bg-amber-500/10 border-b border-amber-500/20 p-3.5 flex items-center gap-3">
-            <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs font-bold text-amber-300">Ordering for Takeaway / Table</p>
-            </div>
-            {items.length > 0 && (
-              <button
-                onClick={clearCart}
-                className="text-[11px] font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
-              >
-                <Trash2 className="w-3 h-3" />
-                Clear
-              </button>
-            )}
-          </div>
-
-          {/* Cart View */}
-          {orderPlaced ? (
-            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-3">
-              <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
-              <h3 className="text-xl font-bold text-white">Order Confirmed!</h3>
-              <p className="text-xs text-zinc-400">Your order has been sent to the kitchen.</p>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center">
-              <div className="w-20 h-20 rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-inner relative mb-4">
-                <UtensilsCrossed className="w-10 h-10 text-amber-400/80" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-zinc-950" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Your cart is empty</h3>
-              <p className="text-xs text-zinc-400 mt-1 max-w-xs">
-                Select delicious food items from the menu to populate your order.
-              </p>
-              <button
+                type="button"
+                aria-label="Close cart"
                 onClick={closeDrawer}
-                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs transition-all shadow-md"
-              >
-                <span>Browse Menu</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
-              {items.map((cartItem: any) => {
-                const item = cartItem.menuItem || cartItem;
-                const itemId = cartItem.id || item.id;
-                const itemName = item.name || cartItem.name || 'Food Item';
-                const itemImage = item.imageUrl || item.image || cartItem.image;
-                const itemPrice = Number(item.price || cartItem.price || 0);
-                const itemQty = Number(cartItem.quantity || 1);
+                className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm"
+            />
 
-                return (
-                  <div
-                    key={itemId}
-                    className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 flex items-center gap-3.5 hover:border-zinc-700 transition-all"
-                  >
-                    {itemImage && (
-                      <img
-                        src={itemImage}
-                        alt={itemName}
-                        className="w-16 h-16 rounded-xl object-cover border border-zinc-800 shrink-0"
-                      />
+            {/* Drawer */}
+            <aside
+                className="fixed right-0 top-0 z-[120] flex h-full w-full max-w-[460px] flex-col border-l border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl"
+                aria-label="Shopping cart"
+            >
+                {/* Header */}
+                <div className="flex h-[72px] items-center justify-between border-b border-[var(--border-color)] px-5">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-gold)]/10 text-[var(--accent-gold)]">
+                            <ShoppingCart className="h-5 w-5" />
+                        </div>
+
+                        <div>
+                            <h2 className="text-base font-black text-[var(--text-primary)]">
+                                Your Cart
+                            </h2>
+
+                            <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">
+                                {itemCount}{' '}
+                                {itemCount === 1
+                                    ? 'item'
+                                    : 'items'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={closeDrawer}
+                        aria-label="Close cart"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] transition hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                {/* Cart content */}
+                <div className="flex-1 overflow-y-auto px-4 py-5 custom-scrollbar">
+                    {cart.length === 0 ? (
+                        <div className="flex min-h-full items-center justify-center">
+                            <div className="w-full max-w-sm text-center">
+                                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)]">
+                                    <ShoppingCart className="h-7 w-7" />
+                                </div>
+
+                                <h3 className="mt-5 text-lg font-black text-[var(--text-primary)]">
+                                    Your cart is empty
+                                </h3>
+
+                                <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                                    Add some delicious dishes from the menu to get started.
+                                </p>
+
+                                <Link
+                                    href="/menu"
+                                    onClick={closeDrawer}
+                                    className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--accent-gold)] px-5 text-sm font-bold text-black transition hover:brightness-105"
+                                >
+                                    Explore Menu
+                                    <ArrowRight className="h-4 w-4" />
+                                </Link>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {/* Clear cart */}
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                    Order Summary
+                                </span>
+
+                                <button
+                                    type="button"
+                                    onClick={clearCart}
+                                    className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-red-400 transition hover:text-red-300"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Clear cart
+                                </button>
+                            </div>
+
+                            {/* Items */}
+                            {cart.map((item) => {
+                                const menuItem =
+                                    item.menuItem;
+
+                                const lineTotal =
+                                    menuItem.price *
+                                    item.quantity;
+
+                                return (
+                                    <div
+                                        key={menuItem.id}
+                                        className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-3"
+                                    >
+                                        <div className="flex gap-3">
+                                            {/* Image */}
+                                            <img
+                                                src={menuItem.image}
+                                                alt={menuItem.name}
+                                                className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                                            />
+
+                                            {/* Info */}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <h3 className="truncate text-sm font-bold text-[var(--text-primary)]">
+                                                            {menuItem.name}
+                                                        </h3>
+
+                                                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                                                            Rs.{' '}
+                                                            {menuItem.price.toLocaleString(
+                                                                'en-PK'
+                                                            )}{' '}
+                                                            each
+                                                        </p>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeFromCart(
+                                                                menuItem.id
+                                                            )
+                                                        }
+                                                        aria-label={`Remove ${menuItem.name} from cart`}
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-red-500/10 hover:text-red-400"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+
+                                                <div className="mt-3 flex items-center justify-between">
+                                                    {/* Quantity */}
+                                                    <div className="flex items-center overflow-hidden rounded-lg border border-[var(--border-color)] bg-[var(--bg-elevated)]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                updateQuantity(
+                                                                    menuItem.id,
+                                                                    -1
+                                                                )
+                                                            }
+                                                            aria-label={`Decrease ${menuItem.name} quantity`}
+                                                            className="flex h-8 w-8 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-gold)]"
+                                                        >
+                                                            <Minus className="h-3.5 w-3.5" />
+                                                        </button>
+
+                                                        <span className="flex h-8 min-w-8 items-center justify-center border-x border-[var(--border-color)] px-2 text-xs font-bold text-[var(--text-primary)]">
+                                                            {item.quantity}
+                                                        </span>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                updateQuantity(
+                                                                    menuItem.id,
+                                                                    1
+                                                                )
+                                                            }
+                                                            aria-label={`Increase ${menuItem.name} quantity`}
+                                                            className="flex h-8 w-8 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-gold)]"
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Line total */}
+                                                    <div className="text-sm font-black text-[var(--accent-gold)]">
+                                                        Rs.{' '}
+                                                        {lineTotal.toLocaleString(
+                                                            'en-PK'
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Special instructions */}
+                                                {item.specialInstructions && (
+                                                    <div className="mt-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-elevated)] px-3 py-2">
+                                                        <p className="text-[10px] text-[var(--text-secondary)]">
+                                                            <span className="font-bold text-[var(--text-primary)]">
+                                                                Note:
+                                                            </span>{' '}
+                                                            {
+                                                                item.specialInstructions
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
+                </div>
 
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{itemName}</h4>
-                      <p className="text-xs font-extrabold text-amber-400 mt-0.5">
-                        Rs. {(itemPrice * itemQty).toLocaleString()}
-                      </p>
+                {/* Footer */}
+                {cart.length > 0 && (
+                    <div className="border-t border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
+                        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
+                            <div className="space-y-2.5">
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-[var(--text-secondary)]">
+                                        Subtotal
+                                    </span>
+
+                                    <span className="font-semibold text-[var(--text-primary)]">
+                                        Rs.{' '}
+                                        {subtotal.toLocaleString(
+                                            'en-PK'
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-[var(--text-secondary)]">
+                                        Tax
+                                    </span>
+
+                                    <span className="font-semibold text-[var(--text-primary)]">
+                                        Rs.{' '}
+                                        {tax.toLocaleString(
+                                            'en-PK'
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-[var(--text-secondary)]">
+                                        Service Charge
+                                    </span>
+
+                                    <span className="font-semibold text-[var(--text-primary)]">
+                                        Rs.{' '}
+                                        {serviceCharge.toLocaleString(
+                                            'en-PK'
+                                        )}
+                                    </span>
+                                </div>
+
+                                <div className="my-3 border-t border-dashed border-[var(--border-color)]" />
+
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                                            Total
+                                        </p>
+
+                                        <p className="mt-1 text-xl font-black text-[var(--accent-gold)]">
+                                            Rs.{' '}
+                                            {grandTotal.toLocaleString(
+                                                'en-PK'
+                                            )}
+                                        </p>
+                                    </div>
+
+                                    <ReceiptText className="h-5 w-5 text-[var(--text-muted)]" />
+                                </div>
+                            </div>
+
+                            <Link
+                                href="/checkout"
+                                onClick={closeDrawer}
+                                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] text-sm font-black text-black transition hover:brightness-105 active:scale-[0.99]"
+                            >
+                                Proceed to Checkout
+                                <ArrowRight className="h-4 w-4" />
+                            </Link>
+                        </div>
                     </div>
-
-                    <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl p-1">
-                      <button
-                        onClick={() => itemQty === 1 ? removeItem(itemId) : updateQuantity(itemId, itemQty - 1)}
-                        className="w-6 h-6 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center justify-center transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold text-white w-4 text-center">{itemQty}</span>
-                      <button
-                        onClick={() => updateQuantity(itemId, itemQty + 1)}
-                        className="w-6 h-6 rounded-lg bg-amber-500 hover:bg-amber-600 text-black flex items-center justify-center transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Footer Summary */}
-          {items.length > 0 && !orderPlaced && (
-            <div className="p-5 border-t border-zinc-800 bg-zinc-900/90 space-y-3">
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-zinc-400">
-                  <span>Subtotal</span>
-                  <span>Rs. {total.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Tax & Service Fee</span>
-                  <span>Included</span>
-                </div>
-                <div className="flex justify-between text-sm font-extrabold text-white pt-2 border-t border-zinc-800">
-                  <span>Total Payable</span>
-                  <span className="text-amber-400">Rs. {total.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {errorMessage && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center">
-                  {errorMessage}
-                </div>
-              )}
-
-              <button
-                onClick={handleCheckout}
-                disabled={isSubmitting}
-                className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-extrabold text-xs rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <span>Placing Order...</span>
-                ) : (
-                  <>
-                    <span>Confirm Order</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
                 )}
-              </button>
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
+            </aside>
+        </>
+    );
 }
-
-export default CartDrawer;

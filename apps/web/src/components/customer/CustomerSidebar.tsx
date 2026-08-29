@@ -1,502 +1,490 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  Home,
-  UtensilsCrossed,
-  Tag,
-  Heart,
-  ShoppingBag,
-  MapPin,
-  Gift,
-  Headphones,
-  ChevronDown,
+  Bell,
+  Bot,
   ChevronRight,
-  Layers,
+  CircleUserRound,
+  Clock3,
+  Crown,
+  Gift,
+  Heart,
+  Home,
+  LayoutGrid,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Moon,
+
+  PackageSearch,
+  Pizza,
+  Salad,
+  Search,
+  Settings,
+  ShoppingBag,
+  Soup,
+  Sun,
+  UtensilsCrossed,
   X,
-  Plus,
-  Trash2,
-  Sparkles
 } from 'lucide-react';
-import { useCartContext } from '../../context/CartContext';
-import { useFavoritesContext } from '../../context/FavoritesContext';
+
 import { useTableContext } from '../../context/TableContext';
-import { mockMenuItems } from '../../data/mockMenuData';
 
-export function CustomerSidebar() {
-  const [isCategoriesOpen, setIsCategoriesOpen] = useState(true);
-  const [activeItem, setActiveItem] = useState('Home');
-  const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [redeemedRewards, setRedeemedRewards] = useState<number[]>([]);
-  const [trackStep, setTrackStep] = useState(2); // In Kitchen by default
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
 
-  const { openDrawer, addItem } = useCartContext();
-  const { favorites, toggleFavorite } = useFavoritesContext();
+interface CategoryItem {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const MAIN_NAV: NavItem[] = [
+  {
+    label: 'Home',
+    href: '/',
+    icon: Home,
+  },
+  {
+    label: 'AI Picks For You',
+    href: '/#ai-picks',
+    icon: Bot,
+  },
+  {
+    label: 'Trending',
+    href: '/#trending',
+    icon: Crown,
+  },
+  {
+    label: 'Offers',
+    href: '/menu/offers',
+    icon: Gift,
+  },
+  {
+    label: 'All Menu',
+    href: '/menu',
+    icon: LayoutGrid,
+  },
+];
+
+const CATEGORIES: CategoryItem[] = [
+  {
+    label: 'Main Courses',
+    href: '/menu/main-courses',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: 'Pizza',
+    href: '/menu/pizza',
+    icon: Pizza,
+  },
+  {
+    label: 'Burgers',
+    href: '/menu/burgers',
+    icon: ShoppingBag,
+  },
+  {
+    label: 'BBQ & Grills',
+    href: '/menu/bbq',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: 'Pasta',
+    href: '/menu/pasta',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: 'Rice',
+    href: '/menu/rice',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: 'Appetizers',
+    href: '/menu/appetizers',
+    icon: Salad,
+  },
+  {
+    label: 'Soups',
+    href: '/menu/soups',
+    icon: Soup,
+  },
+  {
+    label: 'Salads',
+    href: '/menu/salads',
+    icon: Salad,
+  },
+  {
+    label: 'Drinks',
+    href: '/menu/drinks',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: 'Desserts',
+    href: '/menu/desserts',
+    icon: UtensilsCrossed,
+  },
+  {
+    label: "Chef's Specials",
+    href: '/menu/chef-specials',
+    icon: Crown,
+  },
+];
+
+const ACCOUNT_NAV: NavItem[] = [
+  {
+    label: 'Order History',
+    href: '/orders/history',
+    icon: Clock3,
+  },
+  {
+    label: 'Track Order',
+    href: '/orders/track',
+    icon: PackageSearch,
+  },
+  {
+    label: 'Dining Feedback',
+    href: '/feedback',
+    icon: MessageSquare,
+  },
+  {
+    label: 'Favorites',
+    href: '/favorites',
+    icon: Heart,
+  },
+  {
+    label: 'Profile',
+    href: '/orders',
+    icon: CircleUserRound,
+  },
+];
+
+
+function isActivePath(pathname: string, href: string) {
+  if (href === '/') {
+    return pathname === '/';
+  }
+
+  if (href.includes('#')) {
+    return false;
+  }
+
+  if (pathname === href) {
+    return true;
+  }
+
+  return pathname.startsWith(`${href}/`);
+}
+
+function NavButton({
+  item,
+  active,
+  onClick,
+}: {
+  item: NavItem | CategoryItem;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = item.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200',
+        active
+          ? 'bg-[var(--accent-gold)] text-black shadow-[0_8px_25px_rgba(245,179,66,0.16)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]',
+      ].join(' ')}
+    >
+      <Icon
+        className={[
+          'h-[18px] w-[18px] shrink-0 transition',
+          active
+            ? 'text-black'
+            : 'text-[var(--text-muted)] group-hover:text-[var(--accent-gold)]',
+        ].join(' ')}
+      />
+
+      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+        {item.label}
+      </span>
+
+      {active && (
+        <ChevronRight className="h-4 w-4 shrink-0 text-black/70" />
+      )}
+    </button>
+  );
+}
+
+export default function CustomerSidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+
   const { tableNumber } = useTableContext();
 
-  const favoriteItems = mockMenuItems.filter((item) => favorites.includes(item.id));
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLightTheme, setIsLightTheme] = useState(false);
 
-  const categories = [
-    { id: 'appetizers', name: 'Starters / Appetizers' },
-    { id: 'mains', name: 'Main Courses' },
-    { id: 'pizza', name: 'Pizza & Pasta' },
-    { id: 'burgers', name: 'Burgers & Wraps' },
-    { id: 'drinks', name: 'Beverages & Drinks' },
-    { id: 'desserts', name: 'Desserts & Sweets' },
-  ];
+  useEffect(() => {
+    const root = document.documentElement;
 
-  const rewardPerks = [
-    { id: 1, points: 100, title: 'Free Artisan Dessert', desc: 'Redeem for any chocolate lava cake or panna cotta.' },
-    { id: 2, points: 200, title: '20% Off Total Bill', desc: 'Valid for your current dining table session.' },
-    { id: 3, points: 300, title: 'Chef Special Cocktail', desc: 'Complimentary mocktail or signature cocktail.' },
-  ];
+    const savedTheme = localStorage.getItem(
+      'silver_sapoon_theme'
+    );
 
-  const handleNavClick = (itemName: string, sectionId?: string) => {
-    setActiveItem(itemName);
-    if (sectionId) {
-      const el = document.getElementById(sectionId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }
+    if (savedTheme === 'light') {
+      root.classList.add('light');
+      setIsLightTheme(true);
+    } else {
+      root.classList.remove('light');
+      setIsLightTheme(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const navigate = (href: string) => {
+    if (href.includes('#')) {
+      const [path, hash] = href.split('#');
+
+      if (pathname === path || (path === '' && pathname === '/')) {
+        const target = document.getElementById(hash);
+
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        } else {
+          router.push(href);
+        }
+      } else {
+        router.push(href);
+      }
+
+      return;
+    }
+
+    router.push(href);
   };
 
-  const handleClaimReward = (id: number) => {
-    setRedeemedRewards((prev) => [...prev, id]);
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const nextLight = !isLightTheme;
+
+    if (nextLight) {
+      root.classList.add('light');
+      localStorage.setItem(
+        'silver_sapoon_theme',
+        'light'
+      );
+    } else {
+      root.classList.remove('light');
+      localStorage.setItem(
+        'silver_sapoon_theme',
+        'dark'
+      );
+    }
+
+    setIsLightTheme(nextLight);
   };
+
+  const sidebarContent = (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Brand */}
+      <div className="border-b border-[var(--border-color)] px-5 py-5">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="group flex w-full items-center gap-3 text-left"
+          aria-label="Go to Silver Sapoon home"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10">
+            <UtensilsCrossed className="h-5 w-5 text-[var(--accent-gold)]" />
+          </div>
+
+          <div className="min-w-0">
+            <div className="truncate font-serif text-lg font-semibold tracking-wide text-[var(--text-primary)]">
+              Silver Sapoon
+            </div>
+            <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.28em] text-[var(--accent-gold)]">
+              Gourmet Dining
+            </div>
+          </div>
+
+          <ChevronRight className="ml-auto h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--accent-gold)]" />
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="px-4 pt-4">
+        <div className="rounded-2xl border border-[var(--accent-gold)]/20 bg-[var(--accent-gold)]/5 p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--accent-gold)]/20 bg-[var(--bg-card)]">
+              <ShoppingBag className="h-4 w-4 text-[var(--accent-gold)]" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                Your Table
+              </div>
+              <div className="mt-0.5 truncate text-sm font-semibold text-[var(--text-primary)]">
+                {tableNumber
+                  ? `Table ${tableNumber}`
+                  : 'Table not selected'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="space-y-1">
+          {MAIN_NAV.map((item) => (
+            <NavButton
+              key={item.label}
+              item={item}
+              active={isActivePath(pathname, item.href)}
+              onClick={() => navigate(item.href)}
+            />
+          ))}
+        </div>
+
+        <div className="my-5 h-px bg-[var(--border-color)]" />
+
+        <div className="mb-2 px-3">
+          <div className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+            Categories
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {CATEGORIES.map((item) => (
+            <NavButton
+              key={item.label}
+              item={item}
+              active={isActivePath(pathname, item.href)}
+              onClick={() => navigate(item.href)}
+            />
+          ))}
+        </div>
+
+        <div className="my-5 h-px bg-[var(--border-color)]" />
+
+        <div className="mb-2 px-3">
+          <div className="text-[9px] font-bold uppercase tracking-[0.22em] text-[var(--text-muted)]">
+            Account
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {ACCOUNT_NAV.map((item) => (
+            <NavButton
+              key={item.label}
+              item={item}
+              active={isActivePath(pathname, item.href)}
+              onClick={() => navigate(item.href)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom */}
+      <div className="border-t border-[var(--border-color)] p-4">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[var(--text-secondary)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]">
+            {isLightTheme ? (
+              <Sun className="h-4 w-4 text-[var(--accent-gold)]" />
+            ) : (
+              <Moon className="h-4 w-4 text-[var(--accent-gold)]" />
+            )}
+          </div>
+
+          <span className="flex-1 text-left text-xs font-medium">
+            {isLightTheme
+              ? 'Light Theme'
+              : 'Dark Theme'}
+          </span>
+
+          <span className="text-[10px] text-[var(--text-muted)]">
+            {isLightTheme ? 'ON' : 'ON'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate('/profile')}
+          className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+        >
+          <Settings className="h-4 w-4" />
+          <span className="text-xs font-medium">
+            Settings
+          </span>
+        </button>
+
+        <div className="mt-3 px-3 text-[9px] leading-relaxed text-[var(--text-muted)]">
+          Silver Sapoon Customer
+          <br />
+          Premium dining experience
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <aside className="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 bg-zinc-950 border-r border-zinc-800/80 p-5 z-30 overflow-y-auto custom-scrollbar transition-colors">
-        {/* Brand Header */}
-        <div className="flex items-center gap-3 mb-8 px-2">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-amber-400 text-lg shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-            L
-          </div>
-          <div>
-            <h2 className="text-base font-black tracking-wider text-white uppercase">LUMIÈRE</h2>
-            <p className="text-[9px] text-amber-400 font-semibold tracking-widest uppercase -mt-1">Fine Dining</p>
-          </div>
-        </div>
-
-        {/* Navigation List */}
-        <nav className="flex-1 space-y-1.5 text-xs font-semibold">
-          {/* Home */}
-          <button
-            onClick={() => handleNavClick('Home', 'hero')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Home'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <Home className="w-4 h-4 stroke-[2]" />
-            <span>Home</span>
-          </button>
-
-          {/* All Menu */}
-          <button
-            onClick={() => handleNavClick('All Menu', 'menu')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'All Menu'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <UtensilsCrossed className="w-4 h-4 stroke-[2]" />
-            <span>All Menu</span>
-          </button>
-
-          {/* Expandable Categories Item */}
-          <div className="space-y-1 pt-1">
-            <button
-              onClick={() => setIsCategoriesOpen(!isCategoriesOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-zinc-400 hover:text-white hover:bg-zinc-900/60 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <Layers className="w-4 h-4 stroke-[2]" />
-                <span>Categories</span>
-              </div>
-              {isCategoriesOpen ? (
-                <ChevronDown className="w-4 h-4 text-zinc-400" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-zinc-400" />
-              )}
-            </button>
-
-            {/* Sub-Categories Submenu */}
-            {isCategoriesOpen && (
-              <div className="pl-9 pr-2 space-y-1 border-l-2 border-zinc-800/80 ml-5 py-1">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => handleNavClick(cat.name, 'menu')}
-                    className="w-full text-left py-2 px-3 text-[11px] text-zinc-400 hover:text-amber-300 hover:bg-zinc-900/60 rounded-xl transition-all truncate block"
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Offers */}
-          <button
-            onClick={() => handleNavClick('Offers', 'offers')}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Offers'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Tag className="w-4 h-4 stroke-[2]" />
-              <span>Offers</span>
-            </div>
-            <span className="px-2 py-0.5 text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full">
-              New
-            </span>
-          </button>
-
-          {/* Favorites */}
-          <button
-            onClick={() => {
-              setActiveItem('Favorites');
-              setActiveModal('Favorites');
-            }}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Favorites'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Heart className="w-4 h-4 stroke-[2]" />
-              <span>Favorites</span>
-            </div>
-            {favorites.length > 0 && (
-              <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full">
-                {favorites.length}
-              </span>
-            )}
-          </button>
-
-          {/* Orders */}
-          <button
-            onClick={() => {
-              setActiveItem('Orders');
-              openDrawer();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-zinc-400 hover:text-white hover:bg-zinc-900/60 transition-all"
-          >
-            <ShoppingBag className="w-4 h-4 stroke-[2]" />
-            <span>Orders / Cart</span>
-          </button>
-
-          {/* Track Order */}
-          <button
-            onClick={() => {
-              setActiveItem('Track Order');
-              setActiveModal('Track Order');
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Track Order'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <MapPin className="w-4 h-4 stroke-[2]" />
-            <span>Track Order</span>
-          </button>
-
-          {/* Rewards */}
-          <button
-            onClick={() => {
-              setActiveItem('Rewards');
-              setActiveModal('Rewards');
-            }}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Rewards'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Gift className="w-4 h-4 stroke-[2]" />
-              <span>Rewards</span>
-            </div>
-            <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500 text-black rounded-full">
-              150 pts
-            </span>
-          </button>
-
-          {/* Contact Us */}
-          <button
-            onClick={() => handleNavClick('Contact Us', 'about')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
-              activeItem === 'Contact Us'
-                ? 'bg-amber-500/10 border border-amber-500/40 text-amber-400'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
-            }`}
-          >
-            <Headphones className="w-4 h-4 stroke-[2]" />
-            <span>Contact Us</span>
-          </button>
-        </nav>
-
-        {/* Get the App Banner */}
-        <div className="mt-6 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-center space-y-2">
-          <h4 className="text-xs font-bold text-white">Get the App</h4>
-          <p className="text-[10px] text-zinc-400 leading-tight">Order faster & earn rewards</p>
-          <button
-            onClick={() => setActiveModal('App Download')}
-            className="w-full py-2 bg-zinc-800 hover:bg-amber-500 hover:text-black text-white text-[11px] font-bold rounded-xl transition-all"
-          >
-            Download
-          </button>
-        </div>
+      {/* Desktop Sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-[80] hidden w-[280px] border-r border-[var(--border-color)] bg-[var(--bg-secondary)] lg:block">
+        {sidebarContent}
       </aside>
 
-      {/* ── MODALS SYSTEM ── */}
+      {/* Mobile top button */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open navigation menu"
+        className="fixed left-4 top-4 z-[90] flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]/95 text-[var(--text-primary)] shadow-lg backdrop-blur-xl lg:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
 
-      {/* 1. Favorites Modal */}
-      {activeModal === 'Favorites' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Heart className="w-5 h-5 fill-amber-400/20 text-amber-400" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">My Favorite Dishes</h3>
-                  <p className="text-xs text-zinc-400">{favoriteItems.length} bookmarked items</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* Mobile overlay + sidebar */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[120] lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation overlay"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-3">
-              {favoriteItems.length === 0 ? (
-                <div className="text-center py-10 space-y-3">
-                  <Heart className="w-12 h-12 text-zinc-600 mx-auto" />
-                  <p className="text-sm font-semibold text-white">No favorites yet</p>
-                  <p className="text-xs text-zinc-400 max-w-xs mx-auto">
-                    Click the heart icon on any dish in the menu to save your favorites here.
-                  </p>
-                </div>
-              ) : (
-                favoriteItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-zinc-900/70 border border-zinc-800 rounded-2xl flex items-center justify-between gap-3"
-                  >
-                    <img src={item.image} alt={item.name} className="w-14 h-14 rounded-xl object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
-                      <p className="text-xs font-bold text-amber-400 mt-0.5">${Number(item.price).toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          addItem(item, 1);
-                        }}
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black text-xs font-bold rounded-xl flex items-center gap-1 transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add</span>
-                      </button>
-                      <button
-                        onClick={() => toggleFavorite(item.id)}
-                        className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors"
-                        title="Remove from favorites"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
+          <aside className="relative h-full w-[290px] max-w-[86vw] border-r border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-2xl">
             <button
-              onClick={() => setActiveModal(null)}
-              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs rounded-xl transition-all mt-2"
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close navigation menu"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
             >
-              Back to Menu
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Track Order Modal */}
-      {activeModal === 'Track Order' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-md w-full space-y-6 shadow-2xl relative">
-            <button
-              onClick={() => setActiveModal(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900"
-            >
-              <X className="w-5 h-5" />
+              <X className="h-4 w-4" />
             </button>
 
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400">
-                <MapPin className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Live Order Tracking</h3>
-              <p className="text-xs text-zinc-400">
-                Table: <span className="text-amber-400 font-bold">{tableNumber || '07'}</span> • Est. Time: <span className="text-emerald-400 font-bold">12-15 Mins</span>
-              </p>
-            </div>
-
-            {/* Tracking Timeline */}
-            <div className="space-y-4 pt-2">
-              {[
-                { id: 1, label: 'Order Received', desc: 'Sent to kitchen system' },
-                { id: 2, label: 'In Kitchen / Preparing', desc: 'Chef is cooking your dishes' },
-                { id: 3, label: 'Plating & Quality Check', desc: 'Garnishing and preparing for serving' },
-                { id: 4, label: 'Ready for Table', desc: 'Waiter on the way to your table' },
-              ].map((step) => {
-                const isDone = trackStep >= step.id;
-                const isCurrent = trackStep === step.id;
-                return (
-                  <div key={step.id} className="flex items-start gap-3">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                        isDone
-                          ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.4)]'
-                          : 'bg-zinc-900 border border-zinc-800 text-zinc-500'
-                      }`}
-                    >
-                      {isDone ? '✓' : step.id}
-                    </div>
-                    <div>
-                      <p className={`text-xs font-bold ${isCurrent ? 'text-amber-400 animate-pulse' : isDone ? 'text-white' : 'text-zinc-500'}`}>
-                        {step.label}
-                      </p>
-                      <p className="text-[11px] text-zinc-500">{step.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setActiveModal(null)}
-              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-xl transition-all"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Rewards & Loyalty Modal */}
-      {activeModal === 'Rewards' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl relative">
-            <button
-              onClick={() => setActiveModal(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Points Summary Card */}
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-transparent border border-amber-500/30 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-amber-400 font-bold uppercase tracking-wider">Lumière Rewards</p>
-                <p className="text-3xl font-black text-white mt-1">150 <span className="text-xs font-medium text-zinc-400">Pts</span></p>
-                <p className="text-[10px] text-zinc-400 mt-1">Earn 1 pt per $1 spent on every QR order</p>
-              </div>
-              <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
-            </div>
-
-            {/* Redeemable Perks */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-zinc-300">Available Perks</h4>
-              {rewardPerks.map((perk) => {
-                const isClaimed = redeemedRewards.includes(perk.id);
-                return (
-                  <div
-                    key={perk.id}
-                    className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[10px]">
-                          {perk.points} pts
-                        </span>
-                        <h5 className="text-xs font-bold text-white">{perk.title}</h5>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 mt-1">{perk.desc}</p>
-                    </div>
-
-                    <button
-                      onClick={() => handleClaimReward(perk.id)}
-                      disabled={isClaimed}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                        isClaimed
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-                          : 'bg-amber-500 hover:bg-amber-600 text-black shadow-sm'
-                      }`}
-                    >
-                      {isClaimed ? 'Claimed ✓' : 'Redeem'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setActiveModal(null)}
-              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-xs rounded-xl transition-all"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 4. App Download Modal */}
-      {activeModal === 'App Download' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setActiveModal(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-2xl">
-              📱
-            </div>
-
-            <div>
-              <h3 className="text-base font-bold text-white">Lumière Mobile App</h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                Install our PWA app directly to your home screen for instant contactless re-ordering and VIP rewards.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setActiveModal(null)}
-              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-xl transition-all"
-            >
-              Got it!
-            </button>
-          </div>
+            {sidebarContent}
+          </aside>
         </div>
       )}
     </>
   );
 }
-
-export default CustomerSidebar;

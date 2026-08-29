@@ -11,3 +11,5 @@ export * from './schemas/user.schema';
 export * from './schemas/table.schema';
 export * from './schemas/menu.schema';
 export * from './schemas/order.schema';
+export * from './schemas/admin.schema';
+export * from './schemas/phase4.schema';

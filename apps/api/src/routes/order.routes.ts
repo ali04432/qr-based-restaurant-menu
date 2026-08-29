@@ -12,18 +12,17 @@ import { SOCKET_EVENTS } from '../socket/events';
 // ============================================================
 // Order Routes
 //
-// POST /api/orders                     — customer places order
+// POST /api/orders                     — customer places order (with inventory deduction)
 // GET  /api/orders/:id                 — get order status (public by ID)
 // GET  /api/orders?restaurantId=<id>   — list orders for restaurant (staff)
-// PATCH /api/orders/:id/status         — update order status (kitchen staff)
+// PATCH /api/orders/:id/status         — update order status (kitchen/waiter staff)
 // ============================================================
 
 const router = Router();
 
 /**
  * POST /api/orders
- * Customer places a new order from a QR-linked table.
- * Body: { restaurantId, tableId, items: [{ menuItemId, quantity, specialInstructions? }], paymentMethod? }
+ * Customer places a new order with server-side stock validation & atomic inventory deduction.
  */
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   const parsed = customerOrderSchema.safeParse(req.body);
@@ -31,94 +30,184 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     return next(new AppError(parsed.error.errors[0].message, 400, 'VALIDATION_ERROR'));
   }
 
-  const { restaurantId, tableId, items, paymentMethod } = parsed.data;
+  const {
+    restaurantId,
+    tableId,
+    branchId,
+    customerPhone,
+    loyaltyAccountId: providedLoyaltyId,
+    rewardCode,
+    promoCode,
+    items,
+    paymentMethod,
+  } = parsed.data;
 
   try {
     const menuItemIds = items.map((i) => i.menuItemId);
-    let menuItems: Array<{ id: string; name: string; price: number }> = [];
-    
-    try {
-      menuItems = await prisma.menuItem.findMany({
-        where: { id: { in: menuItemIds } },
-      });
-    } catch (dbReadErr) {
-      console.warn('[DB] Could not query menuItems from database, using request fallback:', dbReadErr);
+
+    const TAX_RATE = 0.08; // 8%
+    const SERVICE_CHARGE = 5.0; // flat 5.00
+
+    // Fetch authoritative menu items from database
+    const dbMenuItems = await prisma.menuItem.findMany({
+      where: {
+        id: { in: menuItemIds },
+        restaurantId,
+      },
+      include: { inventory: true, category: true },
+    });
+
+    const dbItemMap = new Map(dbMenuItems.map((m) => [m.id, m]));
+
+    // Validation 1: Ensure all items exist in the database
+    for (const reqItem of items) {
+      const dbItem = dbItemMap.get(reqItem.menuItemId);
+      if (!dbItem) {
+        return next(
+          new AppError(`Menu item "${reqItem.menuItemId}" was not found or is unavailable.`, 404, 'ITEM_NOT_FOUND')
+        );
+      }
+
+      // Validation 2: Ensure item is available
+      if (!dbItem.isAvailable) {
+        return next(
+          new AppError(`"${dbItem.name}" is currently unavailable. Please remove it from your cart.`, 400, 'ITEM_UNAVAILABLE')
+        );
+      }
+
+      // Validation 3: Check stock count (if finite)
+      const currentStock = dbItem.stockCount ?? dbItem.inventory[0]?.stockCount ?? null;
+      if (currentStock !== null && currentStock < reqItem.quantity) {
+        return next(
+          new AppError(
+            `Insufficient stock for "${dbItem.name}". Only ${currentStock} portion(s) remaining, but ${reqItem.quantity} requested.`,
+            400,
+            'INSUFFICIENT_STOCK'
+          )
+        );
+      }
     }
 
-    const priceMap = new Map<string, number>(
-      menuItems.map((m) => [m.id, m.price])
-    );
-    const nameMap = new Map<string, string>(
-      menuItems.map((m) => [m.id, m.name])
-    );
+    // Server-side authoritative price calculation
+    let subtotal = 0;
+    const orderItemsData = items.map((reqItem) => {
+      const dbItem = dbItemMap.get(reqItem.menuItemId)!;
+      const unitPrice = dbItem.price;
+      const costPriceAtOrder = dbItem.costPrice ?? 0;
+      const itemSubtotal = unitPrice * reqItem.quantity;
+      subtotal += itemSubtotal;
 
-    const fallbackMenuNames: Record<string, { name: string; price: number }> = {
-      'item-1': { name: 'Wagyu Beef Steak', price: 89.99 },
-      'item-2': { name: 'Crispy Calamari', price: 14.50 },
-      'item-3': { name: 'Truffle Mushroom Pizza', price: 24.00 },
-      'item-4': { name: 'Double Smash Burger', price: 18.99 },
-      'item-5': { name: 'Chicken Wings', price: 12.50 },
-      'item-6': { name: 'Garlic Bread', price: 8.00 },
-      'item-7': { name: 'Pan-Seared Salmon', price: 38.00 },
-      'item-8': { name: 'Burrata & Heirloom Tomatoes', price: 18.00 },
-      'item-9': { name: 'Prosciutto & Arugula Pizza', price: 26.00 },
-      'item-10': { name: 'Chicken Karahi', price: 28.00 },
-      'item-11': { name: 'Tandoori Roti', price: 3.50 },
-      'item-12': { name: 'Green Salad', price: 7.00 },
-      'item-13': { name: 'Braised Lamb Shank', price: 52.00 },
-      'item-14': { name: 'Shrimp Cocktail Tower', price: 22.00 },
-      'item-15': { name: 'Mushroom Swiss Burger', price: 19.50 },
-      'item-16': { name: 'Chicken Handi', price: 29.00 },
-      'item-17': { name: 'Butter Naan', price: 4.50 },
-      'item-18': { name: 'Fresh Lime Soda', price: 6.00 },
-      'item-19': { name: 'Mint Margarita', price: 7.50 },
-      'item-20': { name: 'Molten Lava Cake', price: 14.00 },
-    };
+      return {
+        menuItemId: dbItem.id,
+        name: dbItem.name,
+        unitPrice,
+        costPriceAtOrder,
+        quantity: reqItem.quantity,
+        subtotal: itemSubtotal,
+        specialInstructions: reqItem.specialInstructions ?? null,
+      };
+    });
 
-    const getItemName = (item: { menuItemId: string; name?: string }) => {
-      return nameMap.get(item.menuItemId) || item.name || fallbackMenuNames[item.menuItemId]?.name || `Special Dish (${item.menuItemId})`;
-    };
+    // ── Loyalty Account Resolution
+    let resolvedLoyaltyAccountId: string | null = providedLoyaltyId || null;
+    let customerTier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' = 'BRONZE';
 
-    const getItemPrice = (item: { menuItemId: string; price?: number }) => {
-      return priceMap.get(item.menuItemId) || item.price || fallbackMenuNames[item.menuItemId]?.price || 25;
-    };
+    if (customerPhone) {
+      const cleanPhone = customerPhone.trim();
+      const account = await prisma.loyaltyAccount.upsert({
+        where: {
+          restaurantId_phone: {
+            restaurantId,
+            phone: cleanPhone,
+          },
+        },
+        update: {},
+        create: {
+          restaurantId,
+          phone: cleanPhone,
+          pointsBalance: 0,
+          lifetimePoints: 0,
+          tier: 'BRONZE',
+        },
+      });
+      resolvedLoyaltyAccountId = account.id;
+      customerTier = account.tier;
+    } else if (resolvedLoyaltyAccountId) {
+      const acc = await prisma.loyaltyAccount.findUnique({ where: { id: resolvedLoyaltyAccountId } });
+      if (acc) customerTier = acc.tier;
+    }
 
-    const TAX_RATE = 0.08;        // 8%
-    const SERVICE_CHARGE = 5.00; // flat rate
-    
-    const subtotal = items.reduce((acc, item) => {
-      const price = getItemPrice(item);
-      return acc + price * item.quantity;
-    }, 0);
+    // ── Promotional Discount Calculation
+    let discount = 0;
+    if (promoCode) {
+      const cleanPromo = promoCode.toUpperCase().trim();
+      const promo = await prisma.promotion.findFirst({
+        where: { restaurantId, code: cleanPromo, isActive: true },
+      });
+      if (promo && (!promo.minOrderAmount || subtotal >= promo.minOrderAmount)) {
+        if (promo.discountType === 'PERCENTAGE') {
+          discount += parseFloat(((subtotal * promo.discountValue) / 100).toFixed(2));
+        } else {
+          discount += Math.min(subtotal, promo.discountValue);
+        }
+      }
+    }
 
-    const tax = parseFloat((subtotal * TAX_RATE).toFixed(2));
-    const total = parseFloat((subtotal + tax + SERVICE_CHARGE).toFixed(2));
+    // ── Reward Voucher Calculation
+    let appliedRewardRedemptionId: string | null = null;
+    if (rewardCode) {
+      const cleanReward = rewardCode.toUpperCase().trim();
+      const redemption = await prisma.rewardRedemption.findFirst({
+        where: {
+          restaurantId,
+          code: cleanReward,
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+        include: { reward: true },
+      });
+
+      if (redemption) {
+        appliedRewardRedemptionId = redemption.id;
+        if (redemption.reward.rewardType === 'DISCOUNT_PERCENT') {
+          discount += parseFloat(((subtotal * redemption.reward.discountValue) / 100).toFixed(2));
+        } else if (redemption.reward.rewardType === 'DISCOUNT_FIXED') {
+          discount += Math.min(subtotal, redemption.reward.discountValue);
+        } else if (redemption.reward.rewardType === 'FREE_ITEM' && redemption.reward.menuItemId) {
+          const freeItem = dbItemMap.get(redemption.reward.menuItemId);
+          if (freeItem) {
+            discount += freeItem.price;
+          }
+        }
+      }
+    }
+
+    discount = Math.min(subtotal, parseFloat(discount.toFixed(2)));
+    const discountedSubtotal = Math.max(0, subtotal - discount);
+    const tax = parseFloat((discountedSubtotal * TAX_RATE).toFixed(2));
+    const total = parseFloat((discountedSubtotal + tax + SERVICE_CHARGE).toFixed(2));
     const orderNumber = `ORD-${Date.now().toString().slice(-4)}`;
 
-    let finalOrder: any = null;
-
-    try {
-      finalOrder = await prisma.order.create({
+    // Execute atomic transaction: Create order + decrement inventory + mark redemption + update table
+    const finalOrder = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
         data: {
           restaurantId,
+          branchId: branchId || null,
           tableId,
+          loyaltyAccountId: resolvedLoyaltyAccountId,
+          rewardRedemptionId: appliedRewardRedemptionId,
           orderNumber,
           status: 'RECEIVED' as any,
           subtotal,
+          discount,
           tax,
           serviceCharge: SERVICE_CHARGE,
           total,
           paymentMethod: paymentMethod ?? 'ONLINE',
           paymentStatus: 'PENDING',
           items: {
-            create: items.map((i) => ({
-              menuItemId: i.menuItemId,
-              name: getItemName(i),
-              unitPrice: getItemPrice(i),
-              quantity: i.quantity,
-              subtotal: getItemPrice(i) * i.quantity,
-              specialInstructions: i.specialInstructions ?? null,
-            })),
+            create: orderItemsData,
           },
         },
         include: {
@@ -126,53 +215,65 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           table: { select: { tableNumber: true } },
         },
       });
-    } catch (dbWriteErr) {
-      console.warn('[DB] Could not write order to Prisma DB (database offline or schema difference), constructing order payload:', dbWriteErr);
-      
-      const orderId = `ord-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-      const derivedTableNumber = tableId.replace(/^t-/, '') || '07';
 
-      finalOrder = {
-        id: orderId,
-        restaurantId,
-        tableId,
-        tableNumber: derivedTableNumber,
-        orderNumber,
-        status: 'NEW',
-        subtotal,
-        tax,
-        serviceCharge: SERVICE_CHARGE,
-        total,
-        paymentMethod: paymentMethod ?? 'ONLINE',
-        paymentStatus: 'PENDING',
-        items: items.map((i) => ({
-          menuItemId: i.menuItemId,
-          name: getItemName(i),
-          price: getItemPrice(i),
-          quantity: i.quantity,
-          specialInstructions: i.specialInstructions,
-        })),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    }
+      // If reward voucher was applied, mark it as REDEEMED
+      if (appliedRewardRedemptionId) {
+        await tx.rewardRedemption.update({
+          where: { id: appliedRewardRedemptionId },
+          data: {
+            status: 'REDEEMED',
+            orderId: order.id,
+            redeemedAt: new Date(),
+          },
+        });
+      }
 
-    // Ensure tableNumber is present for KDS display
-    if (finalOrder && !finalOrder.tableNumber && finalOrder.table?.tableNumber) {
-      finalOrder.tableNumber = finalOrder.table.tableNumber;
-    } else if (finalOrder && !finalOrder.tableNumber) {
-      finalOrder.tableNumber = tableId.replace(/^t-/, '') || '07';
-    }
+      // Deduct stock for each finite inventory item
+      for (const reqItem of items) {
+        const dbItem = dbItemMap.get(reqItem.menuItemId)!;
+        if (dbItem.stockCount !== null) {
+          await tx.menuItem.update({
+            where: { id: dbItem.id },
+            data: {
+              stockCount: { decrement: reqItem.quantity },
+            },
+          });
+
+          await tx.inventory.updateMany({
+            where: { menuItemId: dbItem.id },
+            data: {
+              stockCount: { decrement: reqItem.quantity },
+            },
+          });
+        }
+      }
+
+      // Mark table status as OCCUPIED
+      await tx.table.update({
+        where: { id: tableId },
+        data: { status: 'OCCUPIED' },
+      }).catch(() => {
+        // Table ID might be custom string or UUID
+      });
+
+      return order;
+    });
+
+    // Attach tableNumber for KDS display
+    const enrichedOrder: any = {
+      ...finalOrder,
+      tableNumber: finalOrder.table?.tableNumber || tableId.replace(/^t-/, '') || '01',
+    };
 
     // Emit real-time WebSocket event to kitchen and staff
     try {
-      emitToRestaurant(restaurantId, SOCKET_EVENTS.ORDER_CREATED, finalOrder);
+      emitToRestaurant(restaurantId, SOCKET_EVENTS.ORDER_CREATED, enrichedOrder);
       console.log(`[Socket] Emitted ${SOCKET_EVENTS.ORDER_CREATED} for order ${finalOrder.id} to restaurant ${restaurantId}`);
     } catch (e) {
       console.warn('[Socket] Could not broadcast order.created', e);
     }
 
-    return sendCreated(res, finalOrder, 'Order placed successfully');
+    return sendCreated(res, enrichedOrder, 'Order placed successfully');
   } catch (err) {
     return next(err);
   }
@@ -198,7 +299,10 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
       return next(new AppError('Order not found', 404, 'NOT_FOUND'));
     }
 
-    return sendSuccess(res, order);
+    return sendSuccess(res, {
+      ...order,
+      tableNumber: order.table?.tableNumber || order.tableId.replace(/^t-/, '') || '01',
+    });
   } catch (err) {
     return next(err);
   }
@@ -240,7 +344,12 @@ router.get(
         take: 100,
       });
 
-      return sendSuccess(res, orders);
+      const formatted = orders.map((o) => ({
+        ...o,
+        tableNumber: o.table?.tableNumber || o.tableId.replace(/^t-/, '') || '01',
+      }));
+
+      return sendSuccess(res, formatted);
     } catch (err) {
       return next(err);
     }
@@ -250,7 +359,6 @@ router.get(
 /**
  * PATCH /api/orders/:id/status
  * Update order status (e.g. kitchen marks COOKING → READY).
- * Requires: CHEF, MANAGER, WAITER, CASHIER, ADMIN, SUPER_ADMIN
  */
 router.patch(
   '/:id/status',
@@ -284,20 +392,74 @@ router.patch(
     }
 
     try {
+      const existingOrder = await prisma.order.findUnique({ where: { id } });
+      if (!existingOrder) {
+        return next(new AppError('Order not found', 404, 'NOT_FOUND'));
+      }
+
       const order = await prisma.order.update({
         where: { id },
         data: { status },
-        include: { items: true },
+        include: { items: true, table: { select: { tableNumber: true } } },
       });
 
+      // ── Loyalty Points Accrual on Completion
+      if (status === 'COMPLETED' && order.loyaltyAccountId) {
+        try {
+          const account = await prisma.loyaltyAccount.findUnique({
+            where: { id: order.loyaltyAccountId },
+          });
+          if (account) {
+            const existingTx = await prisma.loyaltyTransaction.findFirst({
+              where: { orderId: order.id, points: { gt: 0 } },
+            });
+            if (!existingTx) {
+              const basePoints = Math.floor(order.total / 100);
+              const multipliers: Record<string, number> = { BRONZE: 1.0, SILVER: 1.2, GOLD: 1.5, PLATINUM: 2.0 };
+              const multiplier = multipliers[account.tier] || 1.0;
+              const pointsEarned = Math.max(1, Math.round(basePoints * multiplier));
+              const newLifetime = account.lifetimePoints + pointsEarned;
+              const newTier = newLifetime >= 4000 ? 'PLATINUM' : newLifetime >= 1500 ? 'GOLD' : newLifetime >= 500 ? 'SILVER' : 'BRONZE';
+
+              await prisma.$transaction([
+                prisma.loyaltyAccount.update({
+                  where: { id: account.id },
+                  data: {
+                    pointsBalance: { increment: pointsEarned },
+                    lifetimePoints: { increment: pointsEarned },
+                    tier: newTier as any,
+                  },
+                }),
+                prisma.loyaltyTransaction.create({
+                  data: {
+                    restaurantId: order.restaurantId,
+                    loyaltyAccountId: account.id,
+                    orderId: order.id,
+                    points: pointsEarned,
+                    description: `Earned ${pointsEarned} points from Order #${order.orderNumber}`,
+                  },
+                }),
+              ]);
+            }
+          }
+        } catch (loyaltyErr) {
+          console.warn('[Loyalty] Could not accrue points for completed order:', loyaltyErr);
+        }
+      }
+
+      const enriched = {
+        ...order,
+        tableNumber: order.table?.tableNumber || order.tableId.replace(/^t-/, '') || '01',
+      };
+
       try {
-        emitToRestaurant(order.restaurantId, SOCKET_EVENTS.ORDER_STATUS_CHANGED, order);
-        emitToRestaurant(order.restaurantId, SOCKET_EVENTS.KITCHEN_ORDER_UPDATED, order);
+        emitToRestaurant(order.restaurantId, SOCKET_EVENTS.ORDER_STATUS_CHANGED, enriched);
+        emitToRestaurant(order.restaurantId, SOCKET_EVENTS.KITCHEN_ORDER_UPDATED, enriched);
       } catch (e) {
         console.warn('[Socket] Could not broadcast status update', e);
       }
 
-      return sendSuccess(res, order, { message: `Order status updated to ${status}` });
+      return sendSuccess(res, enriched, { message: `Order status updated to ${status}` });
     } catch (err) {
       return next(err);
     }

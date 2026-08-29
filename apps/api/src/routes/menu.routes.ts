@@ -80,6 +80,105 @@ router.get('/items', async (req: Request, res: Response, next: NextFunction) => 
 });
 
 /**
+ * GET /api/menu/recommendations?restaurantId=<id>&cartItemIds=<ids>&budget=<budget>
+ * AI Customer Recommendation Engine (frequently bought together, popular upsells, budget filter).
+ */
+router.get('/recommendations', async (req: Request, res: Response, next: NextFunction) => {
+  const { restaurantId, cartItemIds, budget } = req.query as {
+    restaurantId?: string;
+    cartItemIds?: string;
+    budget?: string;
+  };
+
+  if (!restaurantId) {
+    return next(new AppError('restaurantId query parameter is required', 400, 'VALIDATION_ERROR'));
+  }
+
+  try {
+    const rawCartIds = cartItemIds ? cartItemIds.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    const maxBudget = budget ? parseFloat(budget) : undefined;
+
+    // Fetch candidate available menu items for this restaurant
+    const allAvailable = await prisma.menuItem.findMany({
+      where: {
+        restaurantId,
+        isAvailable: true,
+        id: { notIn: rawCartIds },
+        ...(maxBudget ? { price: { lte: maxBudget } } : {}),
+      },
+      include: { category: { select: { name: true } } },
+    });
+
+    if (allAvailable.length === 0) {
+      return sendSuccess(res, []);
+    }
+
+    // If cart has items, find items frequently co-ordered with those in recent orders
+    const coOccurrence = new Map<string, number>();
+    if (rawCartIds.length > 0) {
+      const relatedOrders = await prisma.order.findMany({
+        where: {
+          restaurantId,
+          status: { not: 'CANCELLED' as any },
+          items: { some: { menuItemId: { in: rawCartIds } } },
+        },
+        include: { items: true },
+        take: 50,
+      });
+
+      relatedOrders.forEach((o) => {
+        o.items.forEach((i) => {
+          if (!rawCartIds.includes(i.menuItemId)) {
+            coOccurrence.set(i.menuItemId, (coOccurrence.get(i.menuItemId) || 0) + i.quantity);
+          }
+        });
+      });
+    }
+
+    // Rank candidate items
+    const ranked = allAvailable.map((item) => {
+      let score = 0;
+      let reason = 'Chef’s Special Recommendation';
+
+      const coCount = coOccurrence.get(item.id) || 0;
+      if (coCount > 0) {
+        score += coCount * 10;
+        reason = 'Frequently Ordered Together';
+      }
+
+      if (item.isFeatured) {
+        score += 5;
+        if (coCount === 0) reason = 'Restaurant Favorite';
+      }
+
+      if (item.badge === 'BESTSELLER') {
+        score += 8;
+        if (coCount === 0) reason = 'Bestselling Item';
+      }
+
+      // Bonus for sides & beverages if main dish in cart
+      if (item.category?.name?.toLowerCase().includes('drink') || item.category?.name?.toLowerCase().includes('dessert') || item.category?.name?.toLowerCase().includes('side')) {
+        score += 4;
+        if (coCount === 0) reason = `Popular ${item.category.name} Pairing`;
+      }
+
+      return {
+        ...item,
+        recommendationScore: score,
+        recommendationReason: reason,
+      };
+    });
+
+    ranked.sort((a, b) => b.recommendationScore - a.recommendationScore);
+    const topRecommendations = ranked.slice(0, 6);
+
+    return sendSuccess(res, topRecommendations);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
  * GET /api/menu/items/:id
  * Returns a single menu item by ID.
  */
