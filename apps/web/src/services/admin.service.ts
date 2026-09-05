@@ -466,21 +466,8 @@ export const adminService = {
     return apiClient.delete<{ id: string }>(`/api/admin/scheduled-reports/${id}`, { token });
   },
 
-  // ── System Health & Audit (Phase 4)
-  async getSystemHealth(): Promise<SystemHealthStatus> {
-    return apiClient.get<SystemHealthStatus>('/api/health/system');
-  },
-
-  async getAuditLogs(restaurantId?: string, params: { page?: number; limit?: number; action?: string } = {}, token?: string): Promise<{ logs: AuditLog[]; total: number }> {
-    const query = new URLSearchParams();
-    if (restaurantId) query.append('restaurantId', restaurantId);
-    if (params.action) query.append('action', params.action);
-    if (params.page) query.append('page', params.page.toString());
-    if (params.limit) query.append('limit', params.limit.toString());
-    return apiClient.get(`/api/admin/audit-logs?${query.toString()}`, { token });
-  },
-
   // ── SaaS Subscriptions & Entitlements (Phase 4)
+
   async getSubscriptionPlans(token: string): Promise<SubscriptionPlan[]> {
     return apiClient.get<SubscriptionPlan[]>('/api/admin/subscriptions/plans', { token });
   },
@@ -549,4 +536,66 @@ export const adminService = {
   async updateTenantPlan(restaurantId: string, planTier: string, token: string): Promise<any> {
     return apiClient.patch(`/api/super-admin/restaurants/${restaurantId}/plan`, { planTier }, { token });
   },
+
+  // ── Enterprise Audit & System Observability (Phase 4)
+  async getAuditLogs(
+    params: {
+      page?: number;
+      limit?: number;
+      entity?: string;
+      action?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+      branchId?: string;
+      userId?: string;
+      restaurantId?: string;
+    },
+    token: string
+  ): Promise<{
+    data: AuditLog[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', String(params.page));
+    if (params.limit) q.append('limit', String(params.limit));
+    if (params.entity && params.entity !== 'ALL') q.append('entity', params.entity);
+    if (params.action && params.action !== 'ALL') q.append('action', params.action);
+    if (params.search) q.append('search', params.search);
+    if (params.startDate) q.append('startDate', params.startDate);
+    if (params.endDate) q.append('endDate', params.endDate);
+    if (params.branchId) q.append('branchId', params.branchId);
+    if (params.userId) q.append('userId', params.userId);
+    if (params.restaurantId) q.append('restaurantId', params.restaurantId);
+
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    return apiClient.get(`/api/admin/audit${queryString}`, { token });
+  },
+
+  async getAuditStats(
+    token: string,
+    restaurantId?: string
+  ): Promise<{
+    totalEvents: number;
+    past24hEvents: number;
+    securityAlertCount: number;
+    entityDistribution: Record<string, number>;
+  }> {
+    const q = restaurantId ? `?restaurantId=${restaurantId}` : '';
+    return apiClient.get(`/api/admin/audit/stats${q}`, { token });
+  },
+
+  getAuditExportUrl(token: string, restaurantId?: string): string {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const q = restaurantId ? `?restaurantId=${restaurantId}` : '';
+    return `${base}/api/admin/audit/export${q}`;
+  },
+
+  async getSystemHealth(): Promise<SystemHealthStatus> {
+    return apiClient.get<SystemHealthStatus>('/api/health/system');
+  },
 };
+

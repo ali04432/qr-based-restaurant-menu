@@ -5,6 +5,7 @@ import { loginSchema, createUserSchema } from '@qr-menu/shared';
 import { sendSuccess, sendCreated } from '../utils/api-response';
 import { AppError } from '../middleware/error.middleware';
 import { prisma } from '../config/database';
+import { logAuditEvent } from '../utils/audit';
 
 // ============================================================
 // Authentication Routes
@@ -45,10 +46,35 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     return next(new AppError(parsed.error.errors[0].message, 400, 'VALIDATION_ERROR'));
   }
 
+  const clientIp = ((req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '')
+    .split(',')[0]
+    .trim() || null;
+
   try {
     const result = await loginUser(parsed.data);
+
+    await logAuditEvent({
+      restaurantId: result.user.restaurantId,
+      userId: result.user.id,
+      userEmail: result.user.email,
+      userRole: result.user.role,
+      action: 'LOGIN_SUCCESS',
+      entity: 'AUTH',
+      entityId: result.user.id,
+      details: `User ${result.user.name} (${result.user.role}) authenticated successfully`,
+      ipAddress: clientIp,
+    });
+
     return sendSuccess(res, result, { message: 'Login successful' });
   } catch (err) {
+    await logAuditEvent({
+      userEmail: parsed.data.email,
+      action: 'LOGIN_FAILED',
+      entity: 'AUTH',
+      details: `Failed authentication attempt for email: ${parsed.data.email}`,
+      ipAddress: clientIp,
+    });
+
     return next(err);
   }
 });

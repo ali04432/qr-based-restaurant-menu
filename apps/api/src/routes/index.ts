@@ -31,6 +31,8 @@ import adminJobsRouter from './admin/jobs.routes';
 import adminBranchRouter from './admin/branch.routes';
 import adminSubscriptionRouter from './admin/subscription.routes';
 import superAdminRouter from './admin/super-admin.routes';
+import adminAuditRouter from './admin/audit.routes';
+
 
 // ============================================================
 // API Route Aggregator
@@ -76,5 +78,7 @@ router.use('/admin/jobs', adminJobsRouter);                         // REQ-16: B
 router.use('/admin/branches', adminBranchRouter);                 // REQ-17: Multi-branch & location management
 router.use('/admin/subscriptions', adminSubscriptionRouter);       // REQ-19: SaaS Subscriptions & Tier Management
 router.use('/super-admin', superAdminRouter);                      // REQ-18: Platform Super Admin Console
+router.use('/admin/audit', adminAuditRouter);                      // REQ-21: Enterprise Security & Audit Log
+
 
 export default router;

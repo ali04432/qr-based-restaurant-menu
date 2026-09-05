@@ -26,6 +26,7 @@ import {
   Store,
   Crown,
   Shield,
+  ShieldAlert,
   ChevronRight,
   LogOut,
   X,
@@ -175,12 +176,19 @@ const NAV_ITEMS: NavItem[] = [
     badge: 'SUPER',
   },
   {
+    name: 'Audit & Security',
+    href: '/admin/audit',
+    icon: ShieldAlert,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
+  },
+  {
     name: 'Settings',
     href: '/admin/settings',
     icon: Settings,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
   },
 ];
+
 
 export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
