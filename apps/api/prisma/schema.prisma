@@ -35,30 +35,20 @@ enum TableStatus {
   RESERVED
 }
 
-enum OrderStatus {
+// OrderStatus values: PENDING | RECEIVED | PREPARING | IN_KITCHEN | COOKING | READY | SERVED | COMPLETED | CANCELLED
+// Note: Stored as String in DB after migration from legacy enum
+
+// PaymentMethod values: CASH | CARD | JAZZCASH | EASYPAISA | ONLINE | BANK_TRANSFER | OTHER
+// Note: Stored as String in DB
+
+// PaymentStatus values: PENDING | COMPLETED | FAILED | REFUNDED | PARTIALLY_PAID
+// Note: Stored as String in DB after migration from legacy enum
+
+enum RequestStatus {
   PENDING
-  RECEIVED
-  PREPARING
-  IN_KITCHEN
-  COOKING
-  READY
-  SERVED
-  COMPLETED
+  IN_PROGRESS
+  RESOLVED
   CANCELLED
-}
-
-enum PaymentMethod {
-  CASH
-  CARD
-  JAZZCASH
-  EASYPAISA
-  ONLINE
-}
-
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
 }
 
 enum CustomerTier {
@@ -161,6 +151,8 @@ model Restaurant {
   scheduledReports    ScheduledReport[]
   auditLogs           AuditLog[]
   integrationConfigs  IntegrationConfig[]
+  customerRequests    CustomerRequest[]
+  paymentRefunds      PaymentRefund[]
 
   @@map("restaurants")
 }
@@ -207,6 +199,9 @@ model User {
   branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
   staffActionLogs StaffActionLog[]
   auditLogs       AuditLog[]
+  processedPayments Payment[]        @relation("ProcessedPayments")
+  paymentRefunds    PaymentRefund[]
+  assignedRequests  CustomerRequest[] @relation("AssignedRequests")
 
   @@index([restaurantId])
   @@index([branchId])
@@ -218,7 +213,7 @@ model Table {
   id           String      @id @default(uuid())
   restaurantId String      @map("restaurant_id")
   branchId     String?     @map("branch_id")
-  tableNumber  String      @db.VarChar(20)
+  tableNumber  String      @map("table_number") @db.VarChar(20)
   qrToken      String      @unique @default(uuid()) @map("qr_token") @db.VarChar(255)
   capacity     Int         @default(4)
   status       TableStatus @default(AVAILABLE)
@@ -230,6 +225,7 @@ model Table {
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
   orders     Order[]
+  customerRequests CustomerRequest[]
 
   @@unique([restaurantId, tableNumber])
   @@index([restaurantId])
@@ -312,7 +308,7 @@ model Order {
   loyaltyAccountId    String?        @map("loyalty_account_id")
   rewardRedemptionId  String?        @map("reward_redemption_id")
   orderNumber         String         @map("order_number") @db.VarChar(50)
-  status              OrderStatus    @default(PENDING)
+  status              String         @default("PENDING")
   
   subtotal            Float
   tax                 Float          @default(0)
@@ -321,12 +317,12 @@ model Order {
   deliveryFee         Float          @default(0) @map("delivery_fee")
   total               Float
   
-  paymentStatus       PaymentStatus  @default(PENDING) @map("payment_status")
-  paymentMethod       PaymentMethod  @default(ONLINE) @map("payment_method")
+  paymentStatus       String         @default("PENDING") @map("payment_status")
+  paymentMethod       String         @default("CASH") @map("payment_method")
   customerNote        String?        @map("customer_note")
   
   // Delivery Fleet Info
-  deliveryStatus      DeliveryStatus @default(UNASSIGNED) @map("delivery_status")
+  deliveryStatus      String         @default("UNASSIGNED") @map("delivery_status")
   deliveryProviderRef String?        @map("delivery_provider_ref")
   riderName           String?        @map("rider_name")
   riderPhone          String?        @map("rider_phone")
@@ -380,21 +376,71 @@ model Payment {
   id             String        @id @default(uuid())
   restaurantId   String        @map("restaurant_id")
   orderId        String        @map("order_id")
-  method         PaymentMethod
+  method         String        @default("CASH")
   amount         Float
-  status         PaymentStatus @default(PENDING)
+  status         String        @default("PENDING")
+  receivedAmount Float?        @map("received_amount")
+  changeAmount   Float?        @map("change_amount")
+  notes          String?       @db.Text
   transactionRef String?       @map("transaction_ref")
   paidAt         DateTime?     @map("paid_at")
+  processedById  String?       @map("processed_by_id")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant  Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  processedBy User?           @relation("ProcessedPayments", fields: [processedById], references: [id], onDelete: SetNull)
+  refunds     PaymentRefund[]
 
   @@index([restaurantId])
   @@index([orderId])
+  @@index([processedById])
   @@map("payments")
+}
+
+model PaymentRefund {
+  id           String     @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
+  paymentId    String     @map("payment_id")
+  amount       Float
+  reason       String     @db.Text
+  staffId      String     @map("staff_id")
+  method       String     @default("CASH")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  payment      Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  staff        User       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([paymentId])
+  @@map("payment_refunds")
+}
+
+model CustomerRequest {
+  id           String        @id @default(uuid())
+  restaurantId String        @map("restaurant_id")
+  tableId      String        @map("table_id")
+  type         String        @db.VarChar(100) // WATER | EXTRA_PLATES | CALL_WAITER | BILL_REQUEST | CUSTOM
+  message      String?       @db.Text
+  status       RequestStatus @default(PENDING)
+  assignedToId String?       @map("assigned_to_id")
+  resolvedAt   DateTime?     @map("resolved_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table        Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  assignedTo   User?         @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
+  @@map("customer_requests")
 }
 
 // ============================================================
@@ -756,7 +802,7 @@ model BackgroundJobLog {
   id           String    @id @default(uuid())
   restaurantId String?   @map("restaurant_id")
   jobType      String    @map("job_type")
-  status       JobStatus @default(PENDING)
+  status       String    @default("PENDING")
   payload      String?   @db.Text
   result       String?   @db.Text
   error        String?   @db.Text
@@ -776,10 +822,10 @@ model BackgroundJobLog {
 model IntegrationConfig {
   id           String       @id @default(uuid())
   restaurantId String       @map("restaurant_id")
-  providerType ProviderType @map("provider_type")
+  providerType String       @map("provider_type")
   providerName String       @map("provider_name") @db.VarChar(100)
   isEnabled    Boolean      @default(false) @map("is_enabled")
-  configJson   String       @map("config_json") @db.Text
+  configJson   String       @default("{}") @map("config_json") @db.Text
   lastTestedAt DateTime?    @map("last_tested_at")
   lastStatus   String?      @default("UNCONFIGURED") @map("last_status")
   createdAt    DateTime     @default(now()) @map("created_at")

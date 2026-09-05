@@ -35,6 +35,9 @@ router.get(
 
       if (range === 'today') {
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      } else if (range === 'yesterday') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
       } else if (range === '7d') {
         startDate.setDate(now.getDate() - 6);
         startDate.setHours(0, 0, 0, 0);
@@ -43,6 +46,9 @@ router.get(
         startDate.setHours(0, 0, 0, 0);
       } else if (range === 'month') {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      } else if (range === 'last_month') {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       } else if (range === 'year') {
         startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
       } else if (range === 'custom' && dateFrom && dateTo) {

@@ -30,6 +30,7 @@ import {
   ChevronRight,
   LogOut,
   X,
+  UserCheck,
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { UserRole } from '@qr-menu/shared';
@@ -124,6 +125,12 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Customer Feedback',
     href: '/admin/feedback',
     icon: MessageSquare,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
+  },
+  {
+    name: 'Customers & History',
+    href: '/admin/customers',
+    icon: UserCheck,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
   },
   {

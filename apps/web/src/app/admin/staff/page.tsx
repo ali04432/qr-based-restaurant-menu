@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Plus,
@@ -13,6 +13,9 @@ import {
   X,
   UserPlus,
   Briefcase,
+  TrendingUp,
+  UserCheck,
+  Building,
 } from 'lucide-react';
 import { AdminLayout } from '../../../components/admin/AdminLayout';
 import { adminService } from '../../../services/admin.service';
@@ -26,6 +29,15 @@ const ROLES = [
   UserRole.WAITER,
   UserRole.CASHIER,
 ];
+
+const ROLE_BADGES: Record<string, { bg: string; text: string; border: string }> = {
+  SUPER_ADMIN: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30' },
+  ADMIN: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/30' },
+  MANAGER: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30' },
+  CHEF: { bg: 'bg-orange-500/15', text: 'text-orange-300', border: 'border-orange-500/30' },
+  WAITER: { bg: 'bg-teal-500/15', text: 'text-teal-300', border: 'border-teal-500/30' },
+  CASHIER: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+};
 
 export default function AdminStaffPage() {
   const { user, token } = useAuthContext();
@@ -49,14 +61,14 @@ export default function AdminStaffPage() {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!token) return;
     try {
       setRefreshing(true);
       const [staffData, payrollData, activityData] = await Promise.all([
         adminService.getStaff(restaurantId, token),
         adminService.getPayrollSummary(restaurantId, token),
-        adminService.getStaffActivity(restaurantId, token),
+        adminService.getStaffActivity(restaurantId, 50, token),
       ]);
       setStaffList(staffData || []);
       setPayroll(payrollData || null);
@@ -67,11 +79,11 @@ export default function AdminStaffPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [restaurantId, token]);
 
   useEffect(() => {
     fetchData();
-  }, [restaurantId, token]);
+  }, [fetchData]);
 
   const handleOpenCreate = () => {
     setEditingStaff(null);
@@ -140,50 +152,113 @@ export default function AdminStaffPage() {
   return (
     <AdminLayout
       title="Staff & Payroll Management"
-      subtitle="Role-Based Access Control, Employee Records & Operational Audit Feed"
+      subtitle="Role-Based Staff Directory, Authoritative Monthly Payroll & Action Audit Feed"
       requiredRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER]}
       onRefresh={fetchData}
       isRefreshing={refreshing}
     >
+      {/* Payroll & Staff KPI Summary Cards (Section 20 & 38) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Total Staff
+            </span>
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-white mt-2">
+            {staffList.length}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Total registered accounts</p>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Active Employees
+            </span>
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-emerald-400 mt-2">
+            {payroll?.totalActiveStaff || staffList.length}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Active status staff</p>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Monthly Payroll
+            </span>
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <DollarSign className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-white mt-2">
+            Rs. {(payroll?.monthlyPayrollTotal || 0).toLocaleString()}
+          </div>
+          <p className="text-[11px] text-amber-400 font-medium mt-1">Total active wage cost</p>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Average Wage
+            </span>
+            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              <Briefcase className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-200 mt-2">
+            Rs. {Math.round(payroll?.averageSalary || 0).toLocaleString()}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Per staff member</p>
+        </div>
+      </div>
+
       {/* View Tabs Bar */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('STAFF')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'STAFF'
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-slate-800 text-white border border-slate-700 shadow-xs'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800/80'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-3.5 h-3.5 text-amber-400" />
             <span>Staff Directory ({staffList.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('PAYROLL')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'PAYROLL'
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-slate-800 text-white border border-slate-700 shadow-xs'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800/80'
             }`}
           >
-            <DollarSign className="w-3.5 h-3.5" />
-            <span>Monthly Payroll</span>
+            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Payroll Breakdown</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('ACTIVITY')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'ACTIVITY'
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-slate-800 text-white border border-slate-700 shadow-xs'
+                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800/80'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
+            <History className="w-3.5 h-3.5 text-blue-400" />
             <span>Staff Action Logs ({activityLogs.length})</span>
           </button>
         </div>
@@ -192,7 +267,7 @@ export default function AdminStaffPage() {
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow-md shadow-amber-950/40 shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Add Staff Account</span>
@@ -200,55 +275,67 @@ export default function AdminStaffPage() {
         )}
       </div>
 
-      {/* Tab 1: Staff Directory */}
+      {/* Tab 1: Staff Directory Table */}
       {activeTab === 'STAFF' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl shadow-xl overflow-hidden backdrop-blur-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <table className="w-full text-left text-xs text-slate-300 divide-y divide-slate-800/80">
+              <thead className="bg-slate-950/60 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th className="py-3 px-4">Staff Member</th>
-                  <th className="py-3 px-4">Assigned Role</th>
-                  <th className="py-3 px-4">Contact Phone</th>
-                  <th className="py-3 px-4 text-right">Monthly Salary</th>
-                  <th className="py-3 px-4">Joined Date</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3.5 px-4">Staff Member</th>
+                  <th className="py-3.5 px-4">Assigned Role</th>
+                  <th className="py-3.5 px-4">Email Address</th>
+                  <th className="py-3.5 px-4 text-right">Monthly Wage</th>
+                  <th className="py-3.5 px-4">Joined Date</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {staffList.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="py-3 px-4">
-                      <div className="font-bold text-slate-900">{s.name}</div>
-                      <div className="text-[11px] font-mono text-slate-500">{s.email}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
-                        {s.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 font-mono">
-                      {/* phone not in shared StaffUser type */}
-                      {(s as any).phone || '—'}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                      Rs. {(s.salary || 45000).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 text-[11px]">
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(s)}
-                        className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition"
-                        title="Edit Staff Member"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-800/60">
+                {staffList.map((s) => {
+                  const roleBadge = ROLE_BADGES[s.role] || ROLE_BADGES.WAITER;
+
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-800/40 transition">
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-white text-xs">{s.name}</div>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          ID: {s.id.slice(0, 8)}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${roleBadge.bg} ${roleBadge.text} ${roleBadge.border}`}
+                        >
+                          {s.role}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-mono text-slate-400 text-xs">
+                        {s.email}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-400">
+                        Rs. {(s.salary || 0).toLocaleString()}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
+                        {new Date(s.createdAt).toLocaleDateString()}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(s)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                          title="Edit staff details"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -256,118 +343,75 @@ export default function AdminStaffPage() {
       )}
 
       {/* Tab 2: Monthly Payroll Breakdown */}
-      {activeTab === 'PAYROLL' && (
+      {activeTab === 'PAYROLL' && payroll && (
         <div className="space-y-6">
-          {/* Payroll KPI summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Total Monthly Payroll
-              </span>
-              <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                Rs. {payroll?.monthlyPayrollTotal?.toLocaleString() || '0'}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Across all active employees</p>
+          <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-5 shadow-xl backdrop-blur-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-4">
+              Monthly Departmental Wage Distributions
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(payroll.roleBreakdown || {}).map(([r, data]: [string, any]) => (
+                <div key={r} className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                      {r} Team
+                    </span>
+                    <span className="text-sm font-bold text-white mt-1 block">
+                      {data.count} Staff Member(s)
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-emerald-400 block">
+                      Rs. {data.totalCost?.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-slate-500">Total payroll</span>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Active Staff Headcount
-              </span>
-              <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                {payroll?.totalActiveStaff || 0} Staff
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Kitchen, floor, & management</p>
-            </div>
-
-            <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Average Staff Salary
-              </span>
-              <div className="text-2xl font-black text-emerald-700 mt-2 font-mono">
-                Rs. {payroll?.averageSalary?.toLocaleString() || '0'}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Monthly median compensation</p>
-            </div>
-          </div>
-
-          {/* Role Salary Distribution Table */}
-          <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 font-bold text-xs text-slate-900 uppercase tracking-wider">
-              Department & Role Payroll Distribution
-            </div>
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="py-3 px-4">Role Department</th>
-                  <th className="py-3 px-4 text-right">Headcount</th>
-                  <th className="py-3 px-4 text-right">Total Payroll</th>
-                  <th className="py-3 px-4 text-right">Avg / Member</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {payroll?.roleBreakdown && Object.entries(payroll.roleBreakdown).map(([roleName, rb]) => (
-                  <tr key={roleName} className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-bold text-slate-900 uppercase tracking-wider">
-                      {roleName}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-medium text-slate-700">
-                      {rb.count}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                      Rs. {rb.totalCost.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-slate-600">
-                      Rs. {rb.count > 0 ? Math.round(rb.totalCost / rb.count).toLocaleString() : 0}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
 
-      {/* Tab 3: Staff Action Logs */}
+      {/* Tab 3: Staff Action Logs (Section 39) */}
       {activeTab === 'ACTIVITY' && (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl shadow-xl overflow-hidden backdrop-blur-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <table className="w-full text-left text-xs text-slate-300 divide-y divide-slate-800/80">
+              <thead className="bg-slate-950/60 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">Timestamp</th>
                   <th className="py-3 px-4">Staff Member</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Action Event</th>
-                  <th className="py-3 px-4">Audit Description</th>
+                  <th className="py-3 px-4">Action Performed</th>
+                  <th className="py-3 px-4">Audit Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-800/60">
                 {activityLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400 text-xs">
-                      No staff activity logs recorded yet.
+                    <td colSpan={4} className="py-12 text-center text-slate-500 text-xs">
+                      No staff actions logged yet.
                     </td>
                   </tr>
                 ) : (
                   activityLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 font-mono text-slate-500 text-[11px] whitespace-nowrap">
+                    <tr key={log.id} className="hover:bg-slate-800/40 transition">
+                      <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
                         {new Date(log.createdAt).toLocaleString()}
                       </td>
-                      <td className="py-3 px-4 font-bold text-slate-900">
-                        {log.staffName}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-slate-100 text-slate-700">
+                      <td className="py-3 px-4 font-bold text-white">
+                        <div>{log.staffName}</div>
+                        <span className="text-[10px] text-amber-400 font-mono font-normal">
                           {log.staffRole}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-mono font-bold text-amber-700">
-                        {log.action}
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-slate-200 border border-slate-700">
+                          {log.action}
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-700">
-                        {log.details}
+                      <td className="py-3 px-4 text-slate-400 text-xs">
+                        {log.details || 'Standard operational task'}
                       </td>
                     </tr>
                   ))
@@ -378,84 +422,78 @@ export default function AdminStaffPage() {
         </div>
       )}
 
-      {/* Staff Create/Edit Modal */}
+      {/* Add / Edit Staff Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-slate-200 max-w-sm w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">
-                {editingStaff ? 'Edit Staff Profile' : 'Register Staff Account'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white">
+                {editingStaff ? `Edit Staff: ${editingStaff.name}` : 'Create Staff Member Account'}
               </h3>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {formError && (
-              <div className="p-2 rounded bg-rose-50 text-rose-700 text-xs flex items-center gap-1.5 border border-rose-200">
+              <div className="mt-4 p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name
-                </label>
+                <label className="block font-bold text-slate-300 mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Tariq Mehmood"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+                  placeholder="e.g. Tariq Khan"
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
 
               {!editingStaff && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email Address
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Email Address *</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tariq@restaurant.com"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+                    placeholder="staff@silversapoon.com"
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {editingStaff ? 'New Password (leave blank to keep current)' : 'Password'}
+                <label className="block font-bold text-slate-300 mb-1">
+                  {editingStaff ? 'Reset Password (optional)' : 'Password *'}
                 </label>
                 <input
                   type="password"
                   required={!editingStaff}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+                  placeholder={editingStaff ? 'Leave blank to keep current' : 'Min 6 characters'}
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Role Permission
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Operational Role *</label>
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as any)}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 font-bold focus:outline-hidden focus:border-slate-900"
+                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-hidden focus:border-amber-500 cursor-pointer"
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
@@ -466,33 +504,32 @@ export default function AdminStaffPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Monthly Salary (Rs.)
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Monthly Wage (Rs.) *</label>
                   <input
                     type="number"
-                    min="0"
+                    min={0}
+                    required
                     value={salary}
                     onChange={(e) => setSalary(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono font-bold text-slate-900 focus:outline-hidden focus:border-slate-900"
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="py-1.5 px-3 rounded text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="py-1.5 px-4 rounded text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition disabled:opacity-50"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold shadow-md disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingStaff ? 'Save Changes' : 'Register Staff'}
+                  {isSubmitting ? 'Saving...' : editingStaff ? 'Update Staff' : 'Create Account'}
                 </button>
               </div>
             </form>

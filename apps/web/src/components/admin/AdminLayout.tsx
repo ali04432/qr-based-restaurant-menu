@@ -53,19 +53,19 @@ export function AdminLayout({
   const userRole = (user?.role as UserRole) || UserRole.WAITER;
   if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(userRole)) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white border border-slate-200 rounded-lg p-6 text-center shadow-xs">
-          <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto mb-3">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 text-center shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
-          <p className="text-xs text-slate-600 mt-1 mb-4">
-            Your role (<strong className="text-slate-900">{userRole}</strong>) is not authorized to access this section.
+          <h2 className="text-lg font-bold text-white tracking-tight">Access Restricted</h2>
+          <p className="text-xs text-slate-400 mt-1 mb-4">
+            Your role (<strong className="text-amber-400">{userRole}</strong>) is not authorized to access this section.
           </p>
           <button
             type="button"
             onClick={() => router.push('/admin')}
-            className="w-full py-2 px-4 bg-slate-900 text-white rounded-md text-xs font-semibold hover:bg-slate-800 transition"
+            className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition shadow-md"
           >
             Return to Authorized Dashboard
           </button>
@@ -76,7 +76,7 @@ export function AdminLayout({
 
   return (
     <BranchProvider>
-      <div className="min-h-screen bg-slate-100 text-slate-900 flex overflow-x-hidden">
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex overflow-x-hidden selection:bg-amber-500/30 selection:text-amber-200">
         {/* Sidebar */}
         <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

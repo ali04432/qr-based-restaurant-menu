@@ -28,6 +28,13 @@ export const SOCKET_EVENTS = {
   // ── Staff events (Phase 3+)
   STAFF_NOTIFICATION: 'staff.notification',
 
+  // ── Phase 5 Events: Payment, Requests & Table Sync
+  PAYMENT_COMPLETED: 'payment.completed',
+  PAYMENT_REFUNDED: 'payment.refunded',
+  CUSTOMER_REQUEST_CREATED: 'customer.requestCreated',
+  CUSTOMER_REQUEST_RESOLVED: 'customer.requestResolved',
+  TABLE_UPDATED: 'table.updated',
+
   // ── System events
   SYSTEM_ERROR: 'system.error',
 } as const;

@@ -32,6 +32,9 @@ import adminBranchRouter from './admin/branch.routes';
 import adminSubscriptionRouter from './admin/subscription.routes';
 import superAdminRouter from './admin/super-admin.routes';
 import adminAuditRouter from './admin/audit.routes';
+import adminCustomerRouter from './admin/customer.routes';
+import waiterRouter from './waiter.routes';
+import cashierRouter from './cashier.routes';
 
 
 // ============================================================
@@ -79,6 +82,12 @@ router.use('/admin/branches', adminBranchRouter);                 // REQ-17: Mul
 router.use('/admin/subscriptions', adminSubscriptionRouter);       // REQ-19: SaaS Subscriptions & Tier Management
 router.use('/super-admin', superAdminRouter);                      // REQ-18: Platform Super Admin Console
 router.use('/admin/audit', adminAuditRouter);                      // REQ-21: Enterprise Security & Audit Log
+router.use('/admin/customers', adminCustomerRouter);              // Customer Directory & Order History
+
+// ── Phase 5: Waiter & Cashier POS System routes
+router.use('/waiter', waiterRouter);
+router.use('/cashier', cashierRouter);
+router.use('/admin/cashier', cashierRouter);
 
 
 export default router;

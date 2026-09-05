@@ -597,5 +597,37 @@ export const adminService = {
   async getSystemHealth(): Promise<SystemHealthStatus> {
     return apiClient.get<SystemHealthStatus>('/api/health/system');
   },
+
+  // ── Customer Directory & History (REQ-22, REQ-40)
+  async getCustomers(
+    restaurantId: string,
+    params: { search?: string; tier?: string; page?: number; limit?: number } = {},
+    token: string = ''
+  ): Promise<{
+    customers: Array<{
+      id: string;
+      phone: string;
+      name: string;
+      tier: string;
+      pointsBalance: number;
+      orderCount: number;
+      totalSpent: number;
+      averageOrderValue: number;
+      lastOrderDate: string | null;
+      lastOrderNumber: string | null;
+      lastTable: string | null;
+    }>;
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+    summary: { totalCustomers: number; totalSpend: number; totalOrders: number; averageSpendPerCustomer: number };
+  }> {
+    const q = new URLSearchParams({ restaurantId });
+    if (params.search) q.append('search', params.search);
+    if (params.tier && params.tier !== 'ALL') q.append('tier', params.tier);
+    if (params.page) q.append('page', String(params.page));
+    if (params.limit) q.append('limit', String(params.limit));
+
+    return apiClient.get(`/api/admin/customers?${q.toString()}`, { token });
+  },
 };
+
 

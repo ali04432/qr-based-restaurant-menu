@@ -98,18 +98,18 @@ async function apiFetch(path: string, token: string, opts?: RequestInit) {
 // ─────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, color = 'blue' }: { label: string; value: string | number; sub?: string; color?: string }) {
   const colorMap: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    green: 'bg-green-50 text-green-700 border-green-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
-    rose: 'bg-rose-50 text-rose-700 border-rose-200',
-    purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    teal: 'bg-teal-50 text-teal-700 border-teal-200',
+    blue: 'bg-slate-900/90 text-blue-400 border-slate-800/80',
+    green: 'bg-slate-900/90 text-emerald-400 border-slate-800/80',
+    amber: 'bg-slate-900/90 text-amber-400 border-slate-800/80',
+    rose: 'bg-slate-900/90 text-rose-400 border-slate-800/80',
+    purple: 'bg-slate-900/90 text-purple-400 border-slate-800/80',
+    teal: 'bg-slate-900/90 text-teal-400 border-slate-800/80',
   };
   return (
-    <div className={`border rounded-xl p-4 ${colorMap[color] || colorMap.blue}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      {sub && <p className="text-xs opacity-60 mt-0.5">{sub}</p>}
+    <div className={`border rounded-xl p-4 shadow-lg backdrop-blur-sm ${colorMap[color] || colorMap.blue}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="text-2xl font-bold mt-1 text-white">{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   );
 }

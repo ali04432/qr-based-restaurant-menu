@@ -261,49 +261,58 @@ router.patch(
 );
 
 /**
- * GET /api/admin/staff/activity
+ * GET /api/admin/staff/activity and /api/admin/staff/logs
  * Auditable staff action history.
  */
+const handleGetStaffActivity = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId =
+      req.user?.role === UserRole.SUPER_ADMIN
+        ? (req.query.restaurantId as string) || req.user?.restaurantId
+        : req.user?.restaurantId;
+
+    if (!restaurantId) {
+      return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+    }
+
+    const logs = await prisma.staffActionLog.findMany({
+      where: { restaurantId },
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const formatted = logs.map((l) => ({
+      id: l.id,
+      staffId: l.userId,
+      staffName: l.user?.name || 'Staff Member',
+      staffEmail: l.user?.email || '',
+      staffRole: l.user?.role || UserRole.WAITER,
+      action: l.action,
+      details: l.details || '',
+      createdAt: l.createdAt.toISOString(),
+    }));
+
+    return sendSuccess(res, formatted);
+  } catch (err) {
+    return next(err);
+  }
+};
+
 router.get(
   '/activity',
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      const restaurantId =
-        req.user?.role === UserRole.SUPER_ADMIN
-          ? (req.query.restaurantId as string) || req.user?.restaurantId
-          : req.user?.restaurantId;
+  handleGetStaffActivity
+);
 
-      if (!restaurantId) {
-        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
-      }
-
-      const logs = await prisma.staffActionLog.findMany({
-        where: { restaurantId },
-        include: {
-          user: { select: { id: true, name: true, email: true, role: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 100,
-      });
-
-      const formatted = logs.map((l) => ({
-        id: l.id,
-        staffId: l.userId,
-        staffName: l.user?.name || 'Staff Member',
-        staffEmail: l.user?.email || '',
-        staffRole: l.user?.role || UserRole.WAITER,
-        action: l.action,
-        details: l.details || '',
-        createdAt: l.createdAt.toISOString(),
-      }));
-
-      return sendSuccess(res, formatted);
-    } catch (err) {
-      return next(err);
-    }
-  }
+router.get(
+  '/logs',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  handleGetStaffActivity
 );
 
 export default router;

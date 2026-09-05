@@ -1,0 +1,1 @@
+-- Baseline migration: database was manually migrated

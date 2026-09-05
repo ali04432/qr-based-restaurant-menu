@@ -12,6 +12,8 @@ interface AuthContextState {
   login: (credentials: LoginInput) => Promise<void>;
   logout: () => void;
   quickChefLogin: (restaurantId: string) => void;
+  quickWaiterLogin: (restaurantId: string) => void;
+  quickCashierLogin: (restaurantId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextState | undefined>(undefined);
@@ -29,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Dev bypass: restore the mock chef session without hitting the API
+    // Dev bypass: restore mock sessions without hitting the API
     if (storedToken === 'mock-chef-token') {
       const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
       const mockChef: SafeUser = {
@@ -43,6 +45,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       setToken(storedToken);
       setUser(mockChef);
+      setIsLoading(false);
+      return;
+    }
+
+    if (storedToken === 'mock-waiter-token') {
+      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
+      const mockWaiter: SafeUser = {
+        id: 'waiter-dev-001',
+        restaurantId: storedRestaurantId,
+        name: 'Hamza Khan (Captain)',
+        email: 'waiter@silversapoon.com',
+        role: UserRole.WAITER,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setToken(storedToken);
+      setUser(mockWaiter);
+      setIsLoading(false);
+      return;
+    }
+
+    if (storedToken === 'mock-cashier-token') {
+      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
+      const mockCashier: SafeUser = {
+        id: 'cashier-dev-001',
+        restaurantId: storedRestaurantId,
+        name: 'Bilal Ahmed (Lead Cashier)',
+        email: 'cashier@silversapoon.com',
+        role: UserRole.CASHIER,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setToken(storedToken);
+      setUser(mockCashier);
       setIsLoading(false);
       return;
     }
@@ -94,6 +130,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('qr_mock_restaurant_id', restaurantId);
   };
 
+  // Quick session simulator for Waiter dev/testing without a real login
+  const quickWaiterLogin = (restaurantId: string) => {
+    const mockWaiter: SafeUser = {
+      id: 'waiter-dev-001',
+      restaurantId,
+      name: 'Hamza Khan (Captain)',
+      email: 'waiter@silversapoon.com',
+      role: UserRole.WAITER,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setUser(mockWaiter);
+    setToken('mock-waiter-token');
+    localStorage.setItem('qr_staff_token', 'mock-waiter-token');
+    localStorage.setItem('qr_mock_restaurant_id', restaurantId);
+  };
+
+  // Quick session simulator for Cashier dev/testing without a real login
+  const quickCashierLogin = (restaurantId: string) => {
+    const mockCashier: SafeUser = {
+      id: 'cashier-dev-001',
+      restaurantId,
+      name: 'Bilal Ahmed (Lead Cashier)',
+      email: 'cashier@silversapoon.com',
+      role: UserRole.CASHIER,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setUser(mockCashier);
+    setToken('mock-cashier-token');
+    localStorage.setItem('qr_staff_token', 'mock-cashier-token');
+    localStorage.setItem('qr_mock_restaurant_id', restaurantId);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -104,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         quickChefLogin,
+        quickWaiterLogin,
+        quickCashierLogin,
       }}
     >
       {children}

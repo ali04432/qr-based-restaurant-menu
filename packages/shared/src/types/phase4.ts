@@ -209,6 +209,9 @@ export interface DemandForecastResult {
     suggestedReorderQuantity: number;
   }>;
   aiSummary?: string;
+  predictedOrdersNext7Days?: number;
+  peakLoadSlots?: string[];
+  stockoutAlerts?: string[];
 }
 
 export interface InventoryIntelligenceResult {

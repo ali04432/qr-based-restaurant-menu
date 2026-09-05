@@ -1,19 +1,23 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   UtensilsCrossed,
   Edit2,
   Trash2,
   Search,
-  Filter,
   CheckCircle2,
   XCircle,
   AlertCircle,
   X,
   TrendingUp,
   Boxes,
+  DollarSign,
+  Layers,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { AdminLayout } from '../../../components/admin/AdminLayout';
 import { adminService } from '../../../services/admin.service';
@@ -37,8 +41,8 @@ export default function AdminMenuPage() {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
-  const [price, setPrice] = useState<number>(0);
-  const [costPrice, setCostPrice] = useState<number>(0);
+  const [price, setPrice] = useState<number>(1000);
+  const [costPrice, setCostPrice] = useState<number>(400);
   const [stockCount, setStockCount] = useState<number>(50);
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(10);
   const [prepTimeMin, setPrepTimeMin] = useState<number>(15);
@@ -49,7 +53,7 @@ export default function AdminMenuPage() {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!token) return;
     try {
       setRefreshing(true);
@@ -72,11 +76,11 @@ export default function AdminMenuPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [restaurantId, token, selectedCategory, searchQuery]);
 
   useEffect(() => {
     fetchData();
-  }, [restaurantId, token, selectedCategory]);
+  }, [fetchData]);
 
   const handleOpenCreate = () => {
     setEditingItem(null);
@@ -177,153 +181,206 @@ export default function AdminMenuPage() {
     }
   };
 
+  const currentMargin = price > 0 ? Math.round(((price - costPrice) / price) * 100) : 0;
+
   return (
     <AdminLayout
-      title="Menu Items Management"
-      subtitle="Catalog Pricing, Cost of Goods & Stock Availability"
+      title="Menu Catalog Management"
+      subtitle="Dish Pricing, Unit Cost Margins, Stock Availability & Categories"
       requiredRoles={[UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF]}
       onRefresh={fetchData}
       isRefreshing={refreshing}
     >
-      {/* Top Filter & Search */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1">
-          {/* Category Filter */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-800 font-semibold focus:outline-hidden focus:border-slate-900"
-          >
-            <option value="ALL">All Categories ({categories.length})</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
+      {/* Top Filter & Search Toolbar (Section 17) */}
+      <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-xl backdrop-blur-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Category Pills & Search */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 flex-1">
           {/* Search Box */}
-          <div className="relative flex-1 max-w-xs">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchData()}
               placeholder="Search dishes..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+              className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500/80 transition"
             />
+          </div>
+
+          {/* Category Dropdown */}
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full sm:w-auto px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 font-semibold focus:outline-hidden focus:border-amber-500 cursor-pointer"
+            >
+              <option value="ALL">All Categories ({categories.length})</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
+        {/* Add New Dish CTA */}
         <button
           type="button"
           onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition shadow-md shadow-amber-950/40 shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Dish</span>
         </button>
       </div>
 
-      {/* Menu Items Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-xs overflow-hidden">
+      {/* Menu Items Table (Visual Hierarchy: Name -> Category -> Price -> Stock -> Availability -> Actions) */}
+      <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl shadow-xl overflow-hidden backdrop-blur-sm">
+        <div className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UtensilsCrossed className="w-4 h-4 text-amber-400" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+              Catalog Items ({menuItems.length})
+            </h2>
+          </div>
+          <span className="text-[11px] font-mono text-slate-500">Live PostgreSQL Catalog</span>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <table className="w-full text-left text-xs text-slate-300 divide-y divide-slate-800/80">
+            <thead className="bg-slate-950/60 text-[11px] font-bold uppercase tracking-wider text-slate-400">
               <tr>
-                <th className="py-3 px-4">Dish Details</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-right">Price</th>
-                <th className="py-3 px-4 text-right">Cost</th>
-                <th className="py-3 px-4 text-right">Profit / Margin</th>
-                <th className="py-3 px-4">Stock Status</th>
-                <th className="py-3 px-4">Available</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-4">Dish Name</th>
+                <th className="py-3.5 px-4">Category</th>
+                <th className="py-3.5 px-4 text-right">Selling Price</th>
+                <th className="py-3.5 px-4 text-right">Cost / Margin</th>
+                <th className="py-3.5 px-4 text-center">Stock Count</th>
+                <th className="py-3.5 px-4 text-center">Availability</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {menuItems.length === 0 ? (
+            <tbody className="divide-y divide-slate-800/60">
+              {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 text-xs">
-                    No menu items found. Click &quot;Add New Dish&quot; to expand your culinary menu.
+                  <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
+                    Loading menu catalog...
+                  </td>
+                </tr>
+              ) : menuItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 text-xs">
+                    No dishes found matching your criteria.
                   </td>
                 </tr>
               ) : (
                 menuItems.map((item) => {
-                  const profit = item.price - (item.costPrice || 0);
-                  const margin = item.price > 0 ? ((profit / item.price) * 100).toFixed(0) : 0;
-                  const stock = item.stockCount ?? 0;
-                  const threshold = item.lowStockThreshold ?? 10;
-                  const isLow = stock <= threshold && stock > 0;
-                  const isOut = stock <= 0;
+                  const cost = item.costPrice ?? 0;
+                  const margin = item.price > 0 ? Math.round(((item.price - cost) / item.price) * 100) : 0;
+                  const isLow = item.stockCount !== null && item.stockCount <= (item.lowStockThreshold || 10);
+                  const isOut = item.stockCount !== null && item.stockCount <= 0;
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{item.name}</div>
-                        <div className="text-[11px] text-slate-500 max-w-xs truncate">
-                          {item.description || 'No description provided'}
+                    <tr key={item.id} className="hover:bg-slate-800/40 transition">
+                      {/* Name & Badge */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-xs">{item.name}</span>
+                          {item.badge && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
+                              {item.badge}
+                            </span>
+                          )}
                         </div>
+                        {item.description && (
+                          <p className="text-[11px] text-slate-400 max-w-xs truncate mt-0.5">
+                            {item.description}
+                          </p>
+                        )}
                       </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium">
-                        {item.category?.name || item.categoryName || 'General'}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                        Rs. {item.price.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-500">
-                        Rs. {(item.costPrice || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        <span className="text-emerald-700 font-bold block">
-                          +Rs. {profit.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium">{margin}% margin</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                            isOut
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : isLow
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}
-                        >
-                          {stock} portions ({isOut ? 'OUT' : isLow ? 'LOW' : 'OK'})
+
+                      {/* Category */}
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                          {item.category?.name || 'General'}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+
+                      {/* Selling Price */}
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-white">
+                        Rs. {item.price?.toLocaleString()}
+                      </td>
+
+                      {/* Cost / Margin */}
+                      <td className="py-3.5 px-4 text-right font-mono text-slate-300">
+                        <div>Rs. {cost.toLocaleString()}</div>
+                        <span className="text-[10px] text-emerald-400 font-bold">
+                          {margin}% margin
+                        </span>
+                      </td>
+
+                      {/* Stock Count */}
+                      <td className="py-3.5 px-4 text-center font-mono">
+                        {item.stockCount !== null ? (
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              isOut
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                : isLow
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}
+                          >
+                            {isOut ? 'Out of Stock' : `${item.stockCount} left`}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 italic text-[11px]">Unlimited</span>
+                        )}
+                      </td>
+
+                      {/* Availability Live Toggle */}
+                      <td className="py-3.5 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => handleToggleAvailability(item)}
-                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase transition ${
                             item.isAvailable
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
                           }`}
                         >
-                          {item.isAvailable ? 'Active' : 'Hidden'}
+                          {item.isAvailable ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-3 h-3" />
+                              <span>Hidden</span>
+                            </>
+                          )}
                         </button>
                       </td>
-                      <td className="py-3 px-4 text-right">
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(item)}
-                            className="p-1.5 rounded-md text-slate-600 hover:bg-slate-100 border border-slate-200 transition"
-                            title="Edit Dish"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                            title="Edit dish"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5 text-amber-400" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteItem(item.id, item.name)}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition"
-                            title="Delete Dish"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition"
+                            title="Delete dish"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                           </button>
                         </div>
                       </td>
@@ -336,55 +393,52 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
-      {/* Dish Modal */}
+      {/* Add / Edit Dish Modal (Section 17 & 30) */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg border border-slate-200 max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">
-                {editingItem ? 'Edit Menu Item' : 'Create New Menu Item'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white tracking-tight">
+                {editingItem ? `Edit Dish: ${editingItem.name}` : 'Add New Catalog Dish'}
               </h3>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {formError && (
-              <div className="p-2 rounded bg-rose-50 text-rose-700 text-xs flex items-center gap-1.5 border border-rose-200">
+              <div className="mt-4 p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs">
+              {/* Name & Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Dish Name
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Dish Name *</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Wagyu Beef Tenderloin"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+                    placeholder="e.g. Royal Chicken Biryani"
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Category
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Category *</label>
                   <select
                     required
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900 font-semibold"
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-hidden focus:border-amber-500 cursor-pointer"
                   >
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -395,126 +449,123 @@ export default function AdminMenuPage() {
                 </div>
               </div>
 
+              {/* Description */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Description & Ingredients
-                </label>
+                <label className="block font-bold text-slate-300 mb-1">Description</label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Fresh grilled Angus cut served with truffle mash..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-hidden focus:border-slate-900"
+                  placeholder="Ingredients, culinary notes, allergen warnings..."
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-amber-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Selling Price (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={price}
-                    onChange={(e) => setPrice(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 font-mono font-bold focus:outline-hidden focus:border-slate-900"
-                  />
+              {/* Price, Cost & Margin Preview */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-slate-300">Unit Economics & Margin</span>
+                  <span className="font-bold text-emerald-400">
+                    Gross Margin: {currentMargin}%
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Cost Price (Rs.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={costPrice}
-                    onChange={(e) => setCostPrice(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 font-mono focus:outline-hidden focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Stock Count
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={stockCount}
-                    onChange={(e) => setStockCount(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 font-mono focus:outline-hidden focus:border-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Low Alert Threshold
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={lowStockThreshold}
-                    onChange={(e) => setLowStockThreshold(Number(e.target.value))}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-900 font-mono focus:outline-hidden focus:border-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Prep Time (Mins)
-                  </label>
-                  <div className="flex items-center gap-1.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-400 mb-1">Selling Price (Rs.) *</label>
                     <input
                       type="number"
-                      min="1"
-                      value={prepTimeMin}
-                      onChange={(e) => setPrepTimeMin(Number(e.target.value))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
-                      placeholder="Min"
+                      required
+                      min={0}
+                      value={price}
+                      onChange={(e) => setPrice(Number(e.target.value))}
+                      className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
                     />
-                    <span className="text-slate-400 text-xs">-</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-medium text-slate-400 mb-1">Cost Price (COGS) *</label>
                     <input
                       type="number"
-                      min="1"
-                      value={prepTimeMax}
-                      onChange={(e) => setPrepTimeMax(Number(e.target.value))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono"
-                      placeholder="Max"
+                      required
+                      min={0}
+                      value={costPrice}
+                      onChange={(e) => setCostPrice(Number(e.target.value))}
+                      className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Stock Count & Low Threshold */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Available Stock Count</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={stockCount}
+                    onChange={(e) => setStockCount(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">Deducted on every order</span>
+                </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Badge / Tag (Optional)
-                  </label>
+                  <label className="block font-bold text-slate-300 mb-1">Low-Stock Alert Threshold</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={lowStockThreshold}
+                    onChange={(e) => setLowStockThreshold(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">Triggers dashboard warning</span>
+                </div>
+              </div>
+
+              {/* Badge & Kitchen Prep Time */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Badge</label>
                   <input
                     type="text"
                     value={badge}
                     onChange={(e) => setBadge(e.target.value)}
-                    placeholder="e.g. Chef's Special, Spicy"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-xs"
+                    placeholder="e.g. Popular"
+                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Prep Min</label>
+                  <input
+                    type="number"
+                    value={prepTimeMin}
+                    onChange={(e) => setPrepTimeMin(Number(e.target.value))}
+                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">Prep Max</label>
+                  <input
+                    type="number"
+                    value={prepTimeMax}
+                    onChange={(e) => setPrepTimeMax(Number(e.target.value))}
+                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white font-mono"
                   />
                 </div>
               </div>
 
+              {/* Toggles */}
               <div className="flex items-center gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isAvailable}
                     onChange={(e) => setIsAvailable(e.target.checked)}
-                    className="rounded border-slate-300 text-slate-900 focus:ring-0"
+                    className="rounded border-slate-700 bg-slate-950 text-amber-600 focus:ring-0"
                   />
-                  <span className="text-xs font-semibold text-slate-700">Available on Menu</span>
+                  <span className="font-semibold text-white">Visible on Customer QR Menu</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -522,26 +573,27 @@ export default function AdminMenuPage() {
                     type="checkbox"
                     checked={isFeatured}
                     onChange={(e) => setIsFeatured(e.target.checked)}
-                    className="rounded border-slate-300 text-slate-900 focus:ring-0"
+                    className="rounded border-slate-700 bg-slate-950 text-amber-600 focus:ring-0"
                   />
-                  <span className="text-xs font-semibold text-slate-700">Featured Dish</span>
+                  <span className="font-semibold text-white">Feature in Recommendations</span>
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+              {/* Form Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="py-1.5 px-3 rounded text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="py-1.5 px-4 rounded text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition disabled:opacity-50"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold transition shadow-md shadow-amber-950/40 disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingItem ? 'Save Changes' : 'Create Dish'}
+                  {isSubmitting ? 'Saving...' : editingItem ? 'Update Dish' : 'Create Dish'}
                 </button>
               </div>
             </form>
