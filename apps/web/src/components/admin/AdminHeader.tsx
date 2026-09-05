@@ -13,6 +13,7 @@ import {
   Store,
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
+import { useBranchContext } from '../../context/BranchContext';
 import { useSocket } from '../../hooks/useSocket';
 import { adminService } from '../../services/admin.service';
 import { AdminNotification } from '@qr-menu/shared';
@@ -33,6 +34,7 @@ export function AdminHeader({
   isRefreshing,
 }: AdminHeaderProps) {
   const { user, token, logout } = useAuthContext();
+  const { branches, currentBranchId, setCurrentBranchId } = useBranchContext();
   const restaurantId = user?.restaurantId || '1';
 
   const { isConnected } = useSocket({
@@ -89,6 +91,25 @@ export function AdminHeader({
 
       {/* Right Controls */}
       <div className="flex items-center gap-2.5 sm:gap-3.5">
+        {/* Multi-Branch Location Switcher (REQ-17) */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-xs font-medium">
+          <Store className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <select
+            value={currentBranchId || 'ALL'}
+            onChange={(e) => setCurrentBranchId(e.target.value === 'ALL' ? null : e.target.value)}
+            className="bg-transparent text-xs font-semibold text-slate-800 outline-hidden cursor-pointer"
+            title="Active restaurant branch"
+            aria-label="Active restaurant branch"
+          >
+            <option value="ALL">All Branches (Consolidated)</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Real-time Connection Indicator */}
         <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200 text-[11px] font-medium">
           <span

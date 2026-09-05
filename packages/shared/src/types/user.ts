@@ -16,6 +16,7 @@ export enum UserRole {
 export interface User {
   id: string;
   restaurantId: string | null; // null for SUPER_ADMIN accounts
+  branchId?: string | null;
   name: string;
   email: string;
   role: UserRole;

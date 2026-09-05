@@ -154,6 +154,12 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
   },
   {
+    name: 'Branches & Locations',
+    href: '/admin/branches',
+    icon: Store,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+  },
+  {
     name: 'Settings',
     href: '/admin/settings',
     icon: Settings,

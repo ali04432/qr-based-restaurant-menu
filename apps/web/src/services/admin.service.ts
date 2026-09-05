@@ -413,6 +413,33 @@ export const adminService = {
     return apiClient.delete<{ id: string }>(`/api/admin/branches/${id}`, { token });
   },
 
+  async getConsolidatedBranchAnalytics(restaurantId: string, token: string): Promise<{
+    summary: { totalLocations: number; grandTotalRevenue: number; grandTotalOrders: number; avgRevenuePerLocation: number };
+    locations: Array<{
+      branchId: string;
+      name: string;
+      code: string;
+      isActive: boolean;
+      tablesCount: number;
+      staffCount: number;
+      totalOrders: number;
+      completedOrders: number;
+      totalRevenue: number;
+      avgOrderValue: number;
+      revenueSharePercent: number;
+    }>;
+  }> {
+    return apiClient.get(`/api/admin/branches/analytics/consolidated?restaurantId=${restaurantId}`, { token });
+  },
+
+  async assignTableToBranch(branchId: string, tableId: string, token: string): Promise<any> {
+    return apiClient.post(`/api/admin/branches/${branchId}/assign-table`, { tableId }, { token });
+  },
+
+  async assignStaffToBranch(branchId: string, userId: string, token: string): Promise<any> {
+    return apiClient.post(`/api/admin/branches/${branchId}/assign-staff`, { userId }, { token });
+  },
+
   // ── Integrations & Hardware (Phase 4)
   async getIntegrations(restaurantId: string, token: string): Promise<IntegrationConfig[]> {
     return apiClient.get<IntegrationConfig[]>(`/api/admin/integrations?restaurantId=${restaurantId}`, { token });

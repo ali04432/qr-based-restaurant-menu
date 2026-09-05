@@ -2,7 +2,7 @@
 
 ## Progress Tracker & Execution Status
 
-Last Updated: Milestone 6 Completed (Advanced & Scheduled Reporting with Background Jobs Engine)
+Last Updated: Milestone 7 Completed (Multi-Branch & Multi-Location Management)
 
 ---
 
@@ -27,8 +27,8 @@ Last Updated: Milestone 6 Completed (Advanced & Scheduled Reporting with Backgro
 | **REQ-14** | Advanced Business Reporting | `COMPLETE` | Milestone 6 | Extended sales, profit, inventory, tax, staff, loyalty reports (`/api/admin/reports/*`) |
 | **REQ-15** | Scheduled Reports & Background Dispatch | `COMPLETE` | Milestone 6 | `ScheduledReport`, cron schedule runner (`/api/admin/scheduled-reports/*`) |
 | **REQ-16** | Background Jobs & Task Engine | `COMPLETE` | Milestone 6 | `BackgroundJobLog`, async worker, retry & idempotency (`job-queue.service.ts`, `/api/admin/jobs/*`) |
-| **REQ-17** | Multi-Branch / Multi-Location Franchise Management | `IN_PROGRESS` | Milestone 7 | `Branch`, branch switcher, consolidated owner analytics |
-| **REQ-18** | Platform Super Admin Portal | `NOT_STARTED` | Milestone 8 | `/admin/super-admin`, cross-tenant management |
+| **REQ-17** | Multi-Branch / Multi-Location Franchise Management | `COMPLETE` | Milestone 7 | `Branch`, `/api/admin/branches/*`, `BranchContext`, active branch switcher, `/admin/branches` |
+| **REQ-18** | Platform Super Admin Portal | `IN_PROGRESS` | Milestone 8 | `/admin/super-admin`, cross-tenant management |
 | **REQ-19** | SaaS Subscriptions Architecture | `NOT_STARTED` | Milestone 8 | `SubscriptionPlan`, `Subscription`, tier management |
 | **REQ-20** | Feature Entitlements & Usage Limits | `NOT_STARTED` | Milestone 8 | Server-side entitlement guards, table/staff/AI limits |
 | **REQ-21** | Enterprise Security & Audit System | `NOT_STARTED` | Milestone 9 | `AuditLog`, security events, sensitive action tracking |
@@ -69,7 +69,12 @@ Last Updated: Milestone 6 Completed (Advanced & Scheduled Reporting with Backgro
   - Scheduled report generation and multi-channel background dispatch runner (`/api/admin/scheduled-reports/*`).
   - Async background job queue worker with retry exponential backoff and durable logging to `BackgroundJobLog` (`job-queue.service.ts`, `/api/admin/jobs/*`).
   - Comprehensive reports administration dashboard with 6 report views, scheduled report creator, and live job queue monitor (`/admin/reports`).
-- [ ] **Milestone 7: Multi-Branch & Multi-Location Management**
+- [x] **Milestone 7: Multi-Branch & Multi-Location Management**
+  - Complete backend CRUD & consolidated analytics API router (`/api/admin/branches/*`).
+  - Safe branch deactivation protecting historical financial and order ledger records.
+  - Global `BranchContext` and active location switcher in `AdminHeader` enabling seamless store switching across the dashboard.
+  - Dedicated multi-branch franchise management console (`/admin/branches`) with operational KPI cards, location performance comparisons, and outlet editor.
+  - Added "Branches & Locations" to navigation in `AdminSidebar`.
 - [ ] **Milestone 8: Platform Super Admin, SaaS Subscriptions & Entitlements Engine**
 - [ ] **Milestone 9: Enterprise Security, Audit System, Observability & Monitoring**
 - [ ] **Milestone 10: Performance Optimization, Production Verification & Final End-to-End QA**
