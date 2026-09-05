@@ -7,6 +7,7 @@ import { env } from './config/env';
 import { createApp } from './app';
 import { initSocketServer } from './socket/socket.server';
 import { prisma } from './config/database';
+import { jobQueue } from './services/job-queue.service';
 
 // ============================================================
 // Server Entry Point
@@ -33,11 +34,15 @@ async function bootstrap(): Promise<void> {
     console.log(`║  Health:      /api/health              ║`);
     console.log('╚════════════════════════════════════════╝');
     console.log('');
+
+    // Start background job queue
+    jobQueue.start();
   });
 
   // ── Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\n[${signal}] Shutting down gracefully...`);
+    jobQueue.stop();
     httpServer.close(async () => {
       await prisma.$disconnect();
       console.log('[Server] Closed. Goodbye.');

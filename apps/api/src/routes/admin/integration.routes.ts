@@ -319,7 +319,7 @@ router.post(
         paperWidth: paperWidth as any,
         printType: printType as any,
         restaurantName: order.restaurant?.name || 'SILVER SAPOON',
-        orderNumber: order.orderNumber,
+        orderNumber: Number(order.orderNumber),
         tableNumber: order.table?.tableNumber || order.tableId.replace(/^t-/, '') || '01',
         items: order.items.map((i) => ({
           name: i.name,

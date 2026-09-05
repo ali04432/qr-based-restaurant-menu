@@ -26,6 +26,8 @@ import adminSettingsRouter from './admin/settings.routes';
 import adminLoyaltyRouter from './admin/loyalty.routes';
 import adminRewardRouter from './admin/reward.routes';
 import adminIntegrationRouter from './admin/integration.routes';
+import adminScheduledReportRouter from './admin/scheduled-report.routes';
+import adminJobsRouter from './admin/jobs.routes';
 
 // ============================================================
 // API Route Aggregator
@@ -66,5 +68,7 @@ router.use('/admin/settings', adminSettingsRouter);
 router.use('/admin/loyalty', adminLoyaltyRouter);
 router.use('/admin/rewards', adminRewardRouter);
 router.use('/admin/integrations', adminIntegrationRouter);
+router.use('/admin/scheduled-reports', adminScheduledReportRouter); // REQ-15: Scheduled report management
+router.use('/admin/jobs', adminJobsRouter);                         // REQ-16: Background job queue & monitoring
 
 export default router;

@@ -17,6 +17,7 @@ import {
   Sliders,
   Eye,
   Shield,
+  X,
 } from 'lucide-react';
 import { AdminLayout } from '../../../components/admin/AdminLayout';
 import { adminService } from '../../../services/admin.service';

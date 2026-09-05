@@ -2,7 +2,7 @@
 
 ## Progress Tracker & Execution Status
 
-Last Updated: Milestone 4 Completed (Inventory Intelligence & Operational Automation)
+Last Updated: Milestone 6 Completed (Advanced & Scheduled Reporting with Background Jobs Engine)
 
 ---
 
@@ -18,16 +18,16 @@ Last Updated: Milestone 4 Completed (Inventory Intelligence & Operational Automa
 | **REQ-05** | Advanced Admin AI Business Intelligence | `COMPLETE` | Milestone 3 | `/api/admin/ai/query`, factual PostgreSQL aggregations |
 | **REQ-06** | Demand Forecasting Engine | `COMPLETE` | Milestone 3 | `/api/admin/analytics/forecast`, 7-day projections, peak slots, stockout alerts |
 | **REQ-07** | Inventory Intelligence & Velocity Analytics | `COMPLETE` | Milestone 4 | `/api/admin/inventory/intelligence`, reorder suggestions, wastage tracker, valuation |
-| **REQ-08** | WhatsApp Integration Layer | `IN_PROGRESS` | Milestone 5 | `WhatsAppProvider`, adapter, templates, preview mode |
-| **REQ-09** | SMS Integration Layer | `IN_PROGRESS` | Milestone 5 | `SMSProvider`, adapter, OTP & order status dispatch |
-| **REQ-10** | Transactional Email System | `IN_PROGRESS` | Milestone 5 | `EmailProvider`, HTML receipt & report templates |
-| **REQ-11** | Thermal Printer Architecture (ESC/POS) | `IN_PROGRESS` | Milestone 5 | `PrinterProvider`, kitchen & customer receipt renderer |
-| **REQ-12** | Accounting Integration Architecture | `IN_PROGRESS` | Milestone 5 | `AccountingProvider`, ledger CSV & QuickBooks/Xero adapter |
-| **REQ-13** | Delivery Integration Architecture | `IN_PROGRESS` | Milestone 5 | `DeliveryProvider`, rider dispatch & tracking adapter |
-| **REQ-14** | Advanced Business Reporting | `NOT_STARTED` | Milestone 6 | Extended sales, profit, tax, staff, loyalty reports |
-| **REQ-15** | Scheduled Reports & Background Dispatch | `NOT_STARTED` | Milestone 6 | `ScheduledReport`, cron schedule runner |
-| **REQ-16** | Background Jobs & Task Engine | `NOT_STARTED` | Milestone 6 | `BackgroundJobLog`, async worker, retry & idempotency |
-| **REQ-17** | Multi-Branch / Multi-Location Franchise Management | `NOT_STARTED` | Milestone 7 | `Branch`, branch switcher, consolidated owner analytics |
+| **REQ-08** | WhatsApp Integration Layer | `COMPLETE` | Milestone 5 | `WhatsAppService`, adapter, templates, preview mode, `/api/admin/integrations/*` |
+| **REQ-09** | SMS Integration Layer | `COMPLETE` | Milestone 5 | `SMSService`, adapter, OTP & order status dispatch |
+| **REQ-10** | Transactional Email System | `COMPLETE` | Milestone 5 | `EmailService`, HTML receipt & report templates |
+| **REQ-11** | Thermal Printer Architecture (ESC/POS) | `COMPLETE` | Milestone 5 | `ThermalPrinterService`, 80mm/58mm KOT & customer receipt renderer |
+| **REQ-12** | Accounting Integration Architecture | `COMPLETE` | Milestone 5 | `AccountingService`, ledger CSV & QuickBooks/Xero adapter |
+| **REQ-13** | Delivery Integration Architecture | `COMPLETE` | Milestone 5 | `DeliveryService`, rider dispatch & tracking adapter |
+| **REQ-14** | Advanced Business Reporting | `COMPLETE` | Milestone 6 | Extended sales, profit, inventory, tax, staff, loyalty reports (`/api/admin/reports/*`) |
+| **REQ-15** | Scheduled Reports & Background Dispatch | `COMPLETE` | Milestone 6 | `ScheduledReport`, cron schedule runner (`/api/admin/scheduled-reports/*`) |
+| **REQ-16** | Background Jobs & Task Engine | `COMPLETE` | Milestone 6 | `BackgroundJobLog`, async worker, retry & idempotency (`job-queue.service.ts`, `/api/admin/jobs/*`) |
+| **REQ-17** | Multi-Branch / Multi-Location Franchise Management | `IN_PROGRESS` | Milestone 7 | `Branch`, branch switcher, consolidated owner analytics |
 | **REQ-18** | Platform Super Admin Portal | `NOT_STARTED` | Milestone 8 | `/admin/super-admin`, cross-tenant management |
 | **REQ-19** | SaaS Subscriptions Architecture | `NOT_STARTED` | Milestone 8 | `SubscriptionPlan`, `Subscription`, tier management |
 | **REQ-20** | Feature Entitlements & Usage Limits | `NOT_STARTED` | Milestone 8 | Server-side entitlement guards, table/staff/AI limits |
@@ -59,12 +59,16 @@ Last Updated: Milestone 4 Completed (Inventory Intelligence & Operational Automa
 - [x] **Milestone 4: Inventory Intelligence & Operational Automation**
   - Stock velocity analytics, days of stock remaining, automated reorder recommendations, and wastage/spoilage tracking (`/api/admin/inventory/intelligence`).
   - Dedicated Inventory Intelligence tab in `/admin/inventory` with 1-click restock actions.
-- [ ] **Milestone 5: Multi-Provider Integrations Architecture (WhatsApp, SMS, Email, Thermal Printer, Accounting, Delivery)**
-  - Unified `IntegrationConfig` repository and manager in Express API.
-  - Real adapters for WhatsApp, SMS, Transactional Email, ESC/POS Thermal Printing, Accounting Export/Sync, and Delivery Dispatch.
+- [x] **Milestone 5: Multi-Provider Integrations Architecture (WhatsApp, SMS, Email, Thermal Printer, Accounting, Delivery)**
+  - Unified `IntegrationConfig` repository and manager in Express API (`/api/admin/integrations/*`).
+  - Real adapters for WhatsApp (`WhatsAppService`), SMS (`SMSService`), Transactional Email (`EmailService`), ESC/POS Thermal Printing (`ThermalPrinterService`), Accounting Export/Sync (`AccountingService`), and Delivery Dispatch (`DeliveryService`).
   - Live test sandbox mode for every provider (with status checks, payload preview, credential validation).
-  - Integrations management UI tab in `/admin/settings` or dedicated `/admin/integrations`.
-- [ ] **Milestone 6: Advanced & Scheduled Reporting with Background Jobs Engine**
+  - Integrations management UI tab in `/admin/integrations`.
+- [x] **Milestone 6: Advanced & Scheduled Reporting with Background Jobs Engine**
+  - Extended Sales, Profit, Inventory, Tax, Staff Performance, and Loyalty reports with CSV download exports (`/api/admin/reports/*`).
+  - Scheduled report generation and multi-channel background dispatch runner (`/api/admin/scheduled-reports/*`).
+  - Async background job queue worker with retry exponential backoff and durable logging to `BackgroundJobLog` (`job-queue.service.ts`, `/api/admin/jobs/*`).
+  - Comprehensive reports administration dashboard with 6 report views, scheduled report creator, and live job queue monitor (`/admin/reports`).
 - [ ] **Milestone 7: Multi-Branch & Multi-Location Management**
 - [ ] **Milestone 8: Platform Super Admin, SaaS Subscriptions & Entitlements Engine**
 - [ ] **Milestone 9: Enterprise Security, Audit System, Observability & Monitoring**

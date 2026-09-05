@@ -9,7 +9,7 @@ export type SubscriptionStatus = 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED
 export type ReportFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 export type JobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
 export type DeliveryStatus = 'UNASSIGNED' | 'PENDING_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED';
-export type ProviderType = 'WHATSAPP' | 'SMS' | 'EMAIL' | 'PRINTER' | 'ACCOUNTING' | 'DELIVERY';
+export type ProviderType = 'WHATSAPP' | 'SMS' | 'EMAIL' | 'PRINTER' | 'THERMAL_PRINTER' | 'ACCOUNTING' | 'DELIVERY';
 
 // ── Loyalty & Rewards
 export interface LoyaltyAccount {
