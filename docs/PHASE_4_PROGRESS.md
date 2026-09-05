@@ -75,6 +75,13 @@ Last Updated: Milestone 7 Completed (Multi-Branch & Multi-Location Management)
   - Global `BranchContext` and active location switcher in `AdminHeader` enabling seamless store switching across the dashboard.
   - Dedicated multi-branch franchise management console (`/admin/branches`) with operational KPI cards, location performance comparisons, and outlet editor.
   - Added "Branches & Locations" to navigation in `AdminSidebar`.
-- [ ] **Milestone 8: Platform Super Admin, SaaS Subscriptions & Entitlements Engine**
+- [x] **Milestone 8: Platform Super Admin, SaaS Subscriptions & Entitlements Engine**
+  - Entitlements verification middleware (`entitlement.middleware.ts`) enforcing plan quotas for Tables, Staff, Branches, AI Business Intelligence, and External Integrations across STARTER, PRO, BUSINESS, and ENTERPRISE tiers.
+  - Subscription management API router (`/api/admin/subscriptions/*`) with active quota utilization metrics, plan upgrade/downgrade, and cancellation.
+  - Multi-tenant Platform Super Admin API (`/api/super-admin/*`) with platform GMV, MRR, ARR, tenant fleet listing, organization provisioning, and manual plan overrides.
+  - Frontend Tenant Plan & Billing console (`/admin/subscription`) with real-time quota meters, monthly/annual toggle, and 1-click plan switching.
+  - Frontend Platform Super Admin console (`/admin/super-admin`) with executive SaaS financial metrics, tenant directory, instant tenant provisioning modal, and plan override manager.
+  - Protected resource routes guarded by `requireEntitlement`: `table.routes.ts`, `staff.routes.ts`, `branch.routes.ts`, `ai.routes.ts`, `integration.routes.ts`.
 - [ ] **Milestone 9: Enterprise Security, Audit System, Observability & Monitoring**
 - [ ] **Milestone 10: Performance Optimization, Production Verification & Final End-to-End QA**
+

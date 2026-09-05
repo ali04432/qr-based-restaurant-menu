@@ -29,6 +29,8 @@ import adminIntegrationRouter from './admin/integration.routes';
 import adminScheduledReportRouter from './admin/scheduled-report.routes';
 import adminJobsRouter from './admin/jobs.routes';
 import adminBranchRouter from './admin/branch.routes';
+import adminSubscriptionRouter from './admin/subscription.routes';
+import superAdminRouter from './admin/super-admin.routes';
 
 // ============================================================
 // API Route Aggregator
@@ -72,5 +74,7 @@ router.use('/admin/integrations', adminIntegrationRouter);
 router.use('/admin/scheduled-reports', adminScheduledReportRouter); // REQ-15: Scheduled report management
 router.use('/admin/jobs', adminJobsRouter);                         // REQ-16: Background job queue & monitoring
 router.use('/admin/branches', adminBranchRouter);                 // REQ-17: Multi-branch & location management
+router.use('/admin/subscriptions', adminSubscriptionRouter);       // REQ-19: SaaS Subscriptions & Tier Management
+router.use('/super-admin', superAdminRouter);                      // REQ-18: Platform Super Admin Console
 
 export default router;

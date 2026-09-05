@@ -4,6 +4,7 @@ import { sendSuccess } from '../../utils/api-response';
 import { AppError } from '../../middleware/error.middleware';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireRole } from '../../middleware/role.middleware';
+import { requireEntitlement } from '../../middleware/entitlement.middleware';
 import { UserRole, ProviderType } from '@qr-menu/shared';
 import { WhatsAppService } from '../../services/integrations/whatsapp.service';
 import { SMSService } from '../../services/integrations/sms.service';
@@ -54,6 +55,7 @@ router.post(
   '/',
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  requireEntitlement('INTEGRATIONS'),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const restaurantId =

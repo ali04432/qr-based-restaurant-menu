@@ -479,4 +479,74 @@ export const adminService = {
     if (params.limit) query.append('limit', params.limit.toString());
     return apiClient.get(`/api/admin/audit-logs?${query.toString()}`, { token });
   },
+
+  // ── SaaS Subscriptions & Entitlements (Phase 4)
+  async getSubscriptionPlans(token: string): Promise<SubscriptionPlan[]> {
+    return apiClient.get<SubscriptionPlan[]>('/api/admin/subscriptions/plans', { token });
+  },
+
+  async getCurrentSubscription(restaurantId: string, token: string): Promise<{
+    subscription: Subscription;
+    usage: {
+      tables: { current: number; limit: number; percent: number };
+      staff: { current: number; limit: number; percent: number };
+      branches: { current: number; limit: number; percent: number };
+      ordersThisMonth: { current: number; limit: number; percent: number };
+      features: {
+        hasAiFeatures: boolean;
+        hasAdvancedAnalytics: boolean;
+        hasIntegrations: boolean;
+        hasCustomBranding: boolean;
+      };
+    };
+  }> {
+    return apiClient.get(`/api/admin/subscriptions/current?restaurantId=${restaurantId}`, { token });
+  },
+
+  async upgradeSubscription(planTier: string, billingCycle: 'MONTHLY' | 'YEARLY', token: string, restaurantId?: string): Promise<Subscription> {
+    return apiClient.post<Subscription>('/api/admin/subscriptions/upgrade', { planTier, billingCycle, restaurantId }, { token });
+  },
+
+  async cancelSubscription(restaurantId: string, token: string): Promise<Subscription> {
+    return apiClient.post<Subscription>('/api/admin/subscriptions/cancel', { restaurantId }, { token });
+  },
+
+  // ── Platform Super Admin (Phase 4)
+  async getSuperAdminOverview(token: string): Promise<{
+    totalRestaurants: number;
+    totalUsers: number;
+    totalOrders: number;
+    platformGMV: number;
+    mrr: number;
+    arr: number;
+    activeSubscriptions: number;
+    planBreakdown: Record<string, number>;
+  }> {
+    return apiClient.get('/api/super-admin/overview', { token });
+  },
+
+  async getSuperAdminRestaurants(token: string): Promise<Array<{
+    id: string;
+    name: string;
+    slug: string;
+    createdAt: string;
+    planTier: string;
+    subscriptionStatus: string;
+    branchesCount: number;
+    tablesCount: number;
+    staffCount: number;
+    ordersCount: number;
+    ownerEmail: string;
+    ownerName: string;
+  }>> {
+    return apiClient.get('/api/super-admin/restaurants', { token });
+  },
+
+  async provisionTenant(data: { name: string; slug: string; ownerName: string; ownerEmail: string; ownerPassword: string; planTier?: string }, token: string): Promise<any> {
+    return apiClient.post('/api/super-admin/restaurants', data, { token });
+  },
+
+  async updateTenantPlan(restaurantId: string, planTier: string, token: string): Promise<any> {
+    return apiClient.patch(`/api/super-admin/restaurants/${restaurantId}/plan`, { planTier }, { token });
+  },
 };

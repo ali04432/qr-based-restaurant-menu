@@ -4,6 +4,7 @@ import { sendSuccess, sendCreated } from '../../utils/api-response';
 import { AppError } from '../../middleware/error.middleware';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireRole } from '../../middleware/role.middleware';
+import { requireEntitlement } from '../../middleware/entitlement.middleware';
 import { UserRole } from '@qr-menu/shared';
 import { CreateBranchSchema, UpdateBranchSchema } from '@qr-menu/shared';
 import { logStaffAction } from '../../utils/audit';
@@ -195,6 +196,7 @@ router.post(
   '/',
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  requireEntitlement('BRANCHES'),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const restaurantId =

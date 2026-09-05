@@ -24,6 +24,8 @@ import {
   Plug,
   Settings,
   Store,
+  Crown,
+  Shield,
   ChevronRight,
   LogOut,
   X,
@@ -158,6 +160,19 @@ const NAV_ITEMS: NavItem[] = [
     href: '/admin/branches',
     icon: Store,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+  },
+  {
+    name: 'Plan & Billing',
+    href: '/admin/subscription',
+    icon: Crown,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+  },
+  {
+    name: 'Platform Super Admin',
+    href: '/admin/super-admin',
+    icon: Shield,
+    allowedRoles: [UserRole.SUPER_ADMIN],
+    badge: 'SUPER',
   },
   {
     name: 'Settings',
