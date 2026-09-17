@@ -1,17 +1,47 @@
 import { Router, Response, NextFunction } from 'express';
-import { prisma } from '../../config/database';
 import { sendSuccess } from '../../utils/api-response';
 import { AppError } from '../../middleware/error.middleware';
 import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireRole } from '../../middleware/role.middleware';
 import { requireEntitlement } from '../../middleware/entitlement.middleware';
 import { UserRole } from '@qr-menu/shared';
+import {
+  aiQuery,
+  runAssistantPillar,
+  runOperationsPillar,
+  runAnalyticsPillar,
+  runOptimizationPillar,
+} from '../../services/ai/ai.service';
 
 const router = Router();
 
+// ============================================================
+// Phase 5: Admin AI Intelligence Engine Routes
+//
+// Pillar      Route               Allowed Roles
+// ─────────────────────────────────────────────
+// Assistant   POST /query         SUPER_ADMIN, ADMIN, MANAGER
+// Assistant   POST /assistant     SUPER_ADMIN, ADMIN, MANAGER
+// Operations  GET  /operations    SUPER_ADMIN, ADMIN, MANAGER
+// Analytics   GET  /analytics     SUPER_ADMIN, ADMIN, MANAGER
+// Optimization GET /optimization  SUPER_ADMIN, ADMIN, MANAGER
+// All pillars GET /dashboard      SUPER_ADMIN, ADMIN, MANAGER
+// ============================================================
+
+/** Resolve restaurantId from request (SUPER_ADMIN can specify any restaurant) */
+function resolveRestaurantId(req: AuthenticatedRequest): string | null {
+  if (req.user?.role === UserRole.SUPER_ADMIN) {
+    return (req.body?.restaurantId as string) || (req.query?.restaurantId as string) || req.user?.restaurantId || null;
+  }
+  return req.user?.restaurantId || null;
+}
+
+// ── Legacy route — kept for backwards compatibility ────────────
+
 /**
  * POST /api/admin/ai/query
- * Dedicated Admin AI Business Assistant that queries real restaurant database data.
+ * Dedicated Admin AI Business Assistant.
+ * @deprecated Prefer POST /api/admin/ai/assistant
  */
 router.post(
   '/query',
@@ -20,11 +50,7 @@ router.post(
   requireEntitlement('AI'),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const restaurantId =
-        req.user?.role === UserRole.SUPER_ADMIN
-          ? (req.body.restaurantId as string) || req.user?.restaurantId
-          : req.user?.restaurantId;
-
+      const restaurantId = resolveRestaurantId(req);
       if (!restaurantId) {
         return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
       }
@@ -34,171 +60,181 @@ router.post(
         return next(new AppError('Query string is required', 400, 'VALIDATION_ERROR'));
       }
 
-      const normalized = query.toLowerCase().trim();
-
-      // Gather live factual data from DB
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - 6);
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const [
-        restaurant,
-        todayOrders,
-        weekOrders,
-        menuItems,
-        allTables,
-      ] = await Promise.all([
-        prisma.restaurant.findUnique({ where: { id: restaurantId } }),
-        prisma.order.findMany({
-          where: {
-            restaurantId,
-            createdAt: { gte: startOfToday },
-            status: { not: 'CANCELLED' as any },
-          },
-          include: { items: true },
-        }),
-        prisma.order.findMany({
-          where: {
-            restaurantId,
-            createdAt: { gte: startOfWeek },
-            status: { not: 'CANCELLED' as any },
-          },
-          include: { items: true },
-        }),
-        prisma.menuItem.findMany({
-          where: { restaurantId },
-          include: { category: { select: { name: true } }, inventory: true },
-        }),
-        prisma.table.findMany({ where: { restaurantId } }),
-      ]);
-
-      const costFallback = new Map<string, number>();
-      menuItems.forEach((m) => costFallback.set(m.id, m.costPrice ?? 0));
-
-      // Calculations: Today
-      const todaySales = todayOrders.reduce((sum, o) => sum + o.total, 0);
-      let todayCost = 0;
-      todayOrders.forEach((o) => {
-        o.items.forEach((i) => {
-          todayCost += (i.costPriceAtOrder ?? costFallback.get(i.menuItemId) ?? 0) * i.quantity;
-        });
-      });
-      const todayProfit = todaySales - todayCost;
-      const todayMargin = todaySales > 0 ? (todayProfit / todaySales) * 100 : 0;
-
-      // Calculations: Week
-      const weekSales = weekOrders.reduce((sum, o) => sum + o.total, 0);
-      let weekCost = 0;
-      weekOrders.forEach((o) => {
-        o.items.forEach((i) => {
-          weekCost += (i.costPriceAtOrder ?? costFallback.get(i.menuItemId) ?? 0) * i.quantity;
-        });
-      });
-      const weekProfit = weekSales - weekCost;
-      const weekMargin = weekSales > 0 ? (weekProfit / weekSales) * 100 : 0;
-
-      // Item Sales aggregation
-      const itemSales = new Map<string, { name: string; quantity: number; revenue: number; profit: number }>();
-      weekOrders.forEach((o) => {
-        o.items.forEach((i) => {
-          const unitCost = i.costPriceAtOrder ?? costFallback.get(i.menuItemId) ?? 0;
-          const curr = itemSales.get(i.menuItemId) || { name: i.name, quantity: 0, revenue: 0, profit: 0 };
-          curr.quantity += i.quantity;
-          curr.revenue += i.subtotal;
-          curr.profit += i.subtotal - unitCost * i.quantity;
-          itemSales.set(i.menuItemId, curr);
-        });
-      });
-
-      const sortedBySales = Array.from(itemSales.values()).sort((a, b) => b.quantity - a.quantity);
-      const sortedByProfit = Array.from(itemSales.values()).sort((a, b) => b.profit - a.profit);
-
-      // Low stock items
-      const lowStockList = menuItems.filter((i) => {
-        const stock = i.stockCount ?? i.inventory[0]?.stockCount ?? null;
-        const threshold = i.inventory[0]?.lowStockThreshold ?? 10;
-        return stock !== null && stock <= threshold;
-      });
-
-      // Category breakdown
-      const catMap = new Map<string, number>();
-      weekOrders.forEach((o) => {
-        o.items.forEach((i) => {
-          const item = menuItems.find((m) => m.id === i.menuItemId);
-          const cat = item?.category?.name || 'General';
-          catMap.set(cat, (catMap.get(cat) || 0) + i.subtotal);
-        });
-      });
-      const topCategory = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1])[0];
-
-      // Format intelligent, exact responses based on query
-      let answer = '';
-
-      if (normalized.includes('today') && (normalized.includes('sale') || normalized.includes('revenue') || normalized.includes('order'))) {
-        answer = `Today's revenue is **Rs. ${todaySales.toLocaleString()}** across **${todayOrders.length} order(s)**. Estimated gross profit today is **Rs. ${todayProfit.toLocaleString()}** (${todayMargin.toFixed(1)}% margin).`;
-      } else if (normalized.includes('best') || normalized.includes('top') || normalized.includes('most sold') || normalized.includes('popular')) {
-        if (sortedBySales.length > 0) {
-          const topList = sortedBySales.slice(0, 3).map((i, idx) => `${idx + 1}. **${i.name}** (${i.quantity} sold — Rs. ${i.revenue.toLocaleString()})`).join('\n');
-          answer = `Top selling dishes this week:\n${topList}`;
-        } else {
-          answer = 'No sales recorded yet this week to determine top-selling dishes.';
-        }
-      } else if (normalized.includes('underperforming') || normalized.includes('least') || normalized.includes('low sale') || normalized.includes('slow')) {
-        const unsoldItems = menuItems.filter((m) => !itemSales.has(m.id)).slice(0, 4);
-        if (unsoldItems.length > 0) {
-          const list = unsoldItems.map((i) => `• **${i.name}** (Rs. ${i.price})`).join('\n');
-          answer = `Underperforming items with 0 sales this week:\n${list}\n\n*Recommendation: Consider featuring them in a promotional combo or updating their pricing.*`;
-        } else {
-          answer = 'All menu items have recorded sales this week.';
-        }
-      } else if (normalized.includes('profit') || normalized.includes('margin') || normalized.includes('gross')) {
-        answer = `This week's gross sales are **Rs. ${weekSales.toLocaleString()}** with a total cost of **Rs. ${weekCost.toLocaleString()}**, resulting in a gross profit of **Rs. ${weekProfit.toLocaleString()}** (${weekMargin.toFixed(1)}% profit margin).`;
-      } else if (normalized.includes('stock') || normalized.includes('inventory') || normalized.includes('low')) {
-        if (lowStockList.length > 0) {
-          const list = lowStockList.map((i) => `• **${i.name}**: ${i.stockCount ?? i.inventory[0]?.stockCount ?? 0} portions left (Threshold: ${i.inventory[0]?.lowStockThreshold ?? 10})`).join('\n');
-          answer = `Items currently requiring replenishment:\n${list}`;
-        } else {
-          answer = 'All menu items currently have healthy stock levels above their designated thresholds.';
-        }
-      } else if (normalized.includes('category') || normalized.includes('categories')) {
-        if (topCategory) {
-          answer = `The highest-grossing category this week is **${topCategory[0]}**, generating **Rs. ${topCategory[1].toLocaleString()}** in revenue.`;
-        } else {
-          answer = 'Insufficient order data to determine top category revenue.';
-        }
-      } else if (normalized.includes('busy') || normalized.includes('peak') || normalized.includes('period') || normalized.includes('hours')) {
-        // Compute hour distribution
-        const hourMap = new Array(24).fill(0);
-        weekOrders.forEach((o) => {
-          const hr = new Date(o.createdAt).getHours();
-          hourMap[hr] += 1;
-        });
-        let peakHr = 20; // default 8pm
-        let peakCount = 0;
-        hourMap.forEach((cnt, hr) => {
-          if (cnt > peakCount) {
-            peakCount = cnt;
-            peakHr = hr;
-          }
-        });
-        const periodStr = `${peakHr % 12 || 12}:00 ${peakHr >= 12 ? 'PM' : 'AM'} – ${(peakHr + 1) % 12 || 12}:00 ${peakHr + 1 >= 12 ? 'PM' : 'AM'}`;
-        answer = `Your busiest operational period is around **${periodStr}** with **${peakCount} order(s)** placed during this time slot this week.`;
-      } else {
-        answer = `Here is your current restaurant summary for **${restaurant?.name || 'Silver Sapoon'}**:\n\n• **Today's Revenue:** Rs. ${todaySales.toLocaleString()} (${todayOrders.length} orders)\n• **Weekly Gross Sales:** Rs. ${weekSales.toLocaleString()}\n• **Weekly Gross Profit:** Rs. ${weekProfit.toLocaleString()} (${weekMargin.toFixed(1)}% margin)\n• **Active Tables:** ${allTables.filter((t) => t.status !== 'AVAILABLE').length}/${allTables.length}\n• **Low Stock Items:** ${lowStockList.length} item(s)\n\nAsk me specific questions regarding sales trends, dish profitability, inventory alerts, or underperforming dishes.`;
-      }
+      const { reply, provider, context } = await aiQuery(restaurantId, query);
 
       return sendSuccess(res, {
-        reply: answer,
+        reply,
+        provider,
         timestamp: new Date().toISOString(),
         metricsSummary: {
-          todayRevenue: todaySales,
-          todayOrders: todayOrders.length,
-          weekRevenue: weekSales,
-          weekProfit,
-          lowStockCount: lowStockList.length,
+          todayRevenue: context.todaySales,
+          todayOrders: context.todayOrders,
+          weekRevenue: context.weekSales,
+          weekProfit: context.weekProfit,
+          lowStockCount: context.lowStockItems.length,
         },
+      });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── Pillar 1: AI Assistant ─────────────────────────────────────
+
+/**
+ * POST /api/admin/ai/assistant
+ * Natural-language restaurant Q&A.
+ * Returns standard Phase 5 envelope with intent detection and recommendations.
+ */
+router.post(
+  '/assistant',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  requireEntitlement('AI'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const restaurantId = resolveRestaurantId(req);
+      if (!restaurantId) {
+        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+      }
+
+      const { query } = req.body as { query: string };
+      if (!query || typeof query !== 'string' || query.trim().length < 2) {
+        return next(new AppError('Query string is required (min 2 characters)', 400, 'VALIDATION_ERROR'));
+      }
+
+      const result = await runAssistantPillar(restaurantId, query.trim());
+      return sendSuccess(res, result);
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── Pillar 2: Operations AI ───────────────────────────────────
+
+/**
+ * GET /api/admin/ai/operations
+ * Table utilization, peak hours, order flow, and staffing alerts.
+ * Pure DB-driven — always fast, no external AI dependency.
+ */
+router.get(
+  '/operations',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  requireEntitlement('AI'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const restaurantId = resolveRestaurantId(req);
+      if (!restaurantId) {
+        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+      }
+
+      const result = await runOperationsPillar(restaurantId);
+      return sendSuccess(res, result);
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── Pillar 3: Analytics AI ────────────────────────────────────
+
+/**
+ * GET /api/admin/ai/analytics
+ * Revenue breakdown, menu performance, customer insights, and revenue forecasting.
+ */
+router.get(
+  '/analytics',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  requireEntitlement('AI'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const restaurantId = resolveRestaurantId(req);
+      if (!restaurantId) {
+        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+      }
+
+      const result = await runAnalyticsPillar(restaurantId);
+      return sendSuccess(res, result);
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── Pillar 4: Optimization AI ─────────────────────────────────
+
+/**
+ * GET /api/admin/ai/optimization
+ * Inventory reorder, pricing opportunities, menu mix, and operational savings.
+ */
+router.get(
+  '/optimization',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  requireEntitlement('AI'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const restaurantId = resolveRestaurantId(req);
+      if (!restaurantId) {
+        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+      }
+
+      const result = await runOptimizationPillar(restaurantId);
+      return sendSuccess(res, result);
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── All-in-one dashboard endpoint ─────────────────────────────
+
+/**
+ * GET /api/admin/ai/dashboard
+ * Runs all three passive pillars (Operations, Analytics, Optimization) in parallel.
+ * The Assistant pillar is query-driven and excluded from the dashboard fetch.
+ * Highly efficient — all three run as concurrent DB queries.
+ */
+router.get(
+  '/dashboard',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+  requireEntitlement('AI'),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const restaurantId = resolveRestaurantId(req);
+      if (!restaurantId) {
+        return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
+      }
+
+      // Run all three passive pillars concurrently
+      const [operations, analytics, optimization] = await Promise.all([
+        runOperationsPillar(restaurantId),
+        runAnalyticsPillar(restaurantId),
+        runOptimizationPillar(restaurantId),
+      ]);
+
+      // Aggregate all recommendations across pillars
+      const allRecommendations = [
+        ...(operations.recommendations ?? []),
+        ...(analytics.recommendations ?? []),
+        ...(optimization.recommendations ?? []),
+      ].sort((a, b) => {
+        const p = { critical: 0, high: 1, medium: 2, low: 3 };
+        return p[a.priority] - p[b.priority];
+      });
+
+      return sendSuccess(res, {
+        generatedAt: new Date().toISOString(),
+        restaurantId,
+        operations,
+        analytics,
+        optimization,
+        topRecommendations: allRecommendations.slice(0, 5),
       });
     } catch (err) {
       return next(err);

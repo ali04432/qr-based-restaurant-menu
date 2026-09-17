@@ -22,6 +22,98 @@ import { UserRole } from '@qr-menu/shared';
 const router = Router();
 
 /**
+ * GET /api/menu?restaurant=<id>&table=<table>
+ * Returns full grouped menu for customer scan session.
+ */
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+  const restaurantParam = (req.query.restaurant || req.query.restaurantId) as string | undefined;
+  const tableParam = (req.query.table || req.query.tableId) as string | undefined;
+
+  try {
+    // Find restaurant by ID or slug or fallback to first available restaurant
+    let restaurant = restaurantParam
+      ? await prisma.restaurant.findFirst({
+          where: {
+            OR: [{ id: restaurantParam }, { slug: restaurantParam }],
+          },
+        })
+      : null;
+
+    if (!restaurant) {
+      restaurant = await prisma.restaurant.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!restaurant) {
+      return next(new AppError('No restaurant found', 404, 'NOT_FOUND'));
+    }
+
+    // Resolve table if provided
+    let table = null;
+    if (tableParam) {
+      table = await prisma.table.findFirst({
+        where: {
+          restaurantId: restaurant.id,
+          OR: [{ id: tableParam }, { tableNumber: tableParam }],
+        },
+        select: { id: true, tableNumber: true },
+      });
+    }
+
+    // Fetch active categories and available items
+    const [categories, items] = await Promise.all([
+      prisma.menuCategory.findMany({
+        where: { restaurantId: restaurant.id, isActive: true },
+        orderBy: { order: 'asc' },
+      }),
+      prisma.menuItem.findMany({
+        where: { restaurantId: restaurant.id, isAvailable: true },
+        include: { category: { select: { id: true, name: true } } },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+
+    // Group items by category name
+    const menu: Record<string, any[]> = {};
+    for (const cat of categories) {
+      menu[cat.name] = [];
+    }
+
+    for (const item of items) {
+      const catName = item.category?.name || 'General';
+      if (!menu[catName]) {
+        menu[catName] = [];
+      }
+      menu[catName].push({
+        id: item.id,
+        restaurantId: item.restaurantId,
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        imageUrl: item.image,
+        modelUrl: null,
+        category: catName,
+        isAvailable: item.isAvailable,
+      });
+    }
+
+    return res.status(200).json({
+      restaurant: {
+        id: restaurant.id,
+        name: restaurant.name,
+        logo: restaurant.logo,
+        themeColor: '#d97706',
+      },
+      table: table ? { id: table.id, tableNumber: table.tableNumber } : null,
+      menu,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
  * GET /api/menu/categories?restaurantId=<id>
  * Returns all active categories for the given restaurant.
  */
@@ -182,7 +274,7 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
  * GET /api/menu/items/:id
  * Returns a single menu item by ID.
  */
-router.get('/items/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get(['/items/:id', '/item/:id'], async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
 
   try {
@@ -290,5 +382,38 @@ router.delete(
     }
   }
 );
+
+
+/**
+ * GET /api/menu/items/:id/ar-asset
+ * Returns the AR asset linked to a menu item (if any).
+ * Public endpoint — no auth required (accessible from customer QR scan session).
+ */
+router.get('/items/:id/ar-asset', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const asset = await prisma.arAsset.findUnique({
+      where: { menuItemId: req.params.id },
+      select: {
+        id: true,
+        name: true,
+        assetType: true,
+        modelUrl: true,
+        iosModelUrl: true,
+        previewImage: true,
+        mimeType: true,
+        scale: true,
+        status: true,
+      },
+    });
+
+    if (!asset || asset.status !== 'ACTIVE') {
+      return sendSuccess(res, null);
+    }
+
+    return sendSuccess(res, asset);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 export default router;

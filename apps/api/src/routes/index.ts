@@ -33,6 +33,7 @@ import adminSubscriptionRouter from './admin/subscription.routes';
 import superAdminRouter from './admin/super-admin.routes';
 import adminAuditRouter from './admin/audit.routes';
 import adminCustomerRouter from './admin/customer.routes';
+import adminArRouter from './admin/ar.routes';
 import waiterRouter from './waiter.routes';
 import cashierRouter from './cashier.routes';
 
@@ -83,6 +84,7 @@ router.use('/admin/subscriptions', adminSubscriptionRouter);       // REQ-19: Sa
 router.use('/super-admin', superAdminRouter);                      // REQ-18: Platform Super Admin Console
 router.use('/admin/audit', adminAuditRouter);                      // REQ-21: Enterprise Security & Audit Log
 router.use('/admin/customers', adminCustomerRouter);              // Customer Directory & Order History
+router.use('/admin/ar', adminArRouter);                           // Phase 4: AR Asset Management & Telemetry
 
 // ── Phase 5: Waiter & Cashier POS System routes
 router.use('/waiter', waiterRouter);

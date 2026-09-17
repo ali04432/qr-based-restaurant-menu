@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -16,12 +16,15 @@ import {
   Loader2,
   Clock,
   Flame,
+  Box,
 } from 'lucide-react';
 
 import CustomerLayout from '../../../../components/customer/CustomerLayout';
+import Model3DViewer from '../../../../components/customer/Model3DViewer';
 import { useCart } from '../../../../context/CartContext';
 import { useTableContext } from '../../../../context/TableContext';
 import { menuService } from '../../../../services/menu.service';
+import { getArAssetForItem, trackArEvent, ArAssetData } from '../../../../services/ar.service';
 import { MenuItem } from '@qr-menu/shared';
 
 export default function FoodDetailsPage() {
@@ -37,6 +40,7 @@ export default function FoodDetailsPage() {
   const [quantity, setQuantity] = useState(1);
   const [instructions, setInstructions] = useState('');
   const [added, setAdded] = useState(false);
+  const [arAsset, setArAsset] = useState<ArAssetData | null>(null);
 
   const isFavorite = item ? favorites.includes(item.id) : false;
 
@@ -57,10 +61,31 @@ export default function FoodDetailsPage() {
       }
     });
 
+    // Fetch AR asset if available
+    getArAssetForItem(itemId).then((asset) => {
+      if (isMounted) setArAsset(asset);
+    });
+
     return () => {
       isMounted = false;
     };
   }, [itemId, restaurantId]);
+
+  const handleArEvent = useCallback(
+    (eventType: string) => {
+      if (restaurantId) {
+        trackArEvent({
+          restaurantId,
+          menuItemId: itemId,
+          assetId: arAsset?.id,
+          eventType,
+          deviceType: typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop') : undefined,
+          arSupported: typeof navigator !== 'undefined' ? ('xr' in navigator) : false,
+        });
+      }
+    },
+    [restaurantId, itemId, arAsset]
+  );
 
   const handleAddToCart = () => {
     if (!item || item.isAvailable === false) return;
@@ -140,32 +165,62 @@ export default function FoodDetailsPage() {
 
         {/* Main details */}
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          {/* Image */}
-          <div className="relative overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--bg-card)]">
-            <div className="aspect-[4/3] min-h-[320px]">
-              <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
-            </div>
+          {/* Image / 3D Viewer */}
+          <div className="relative">
+            {arAsset ? (
+              /* AR asset available — show 3D viewer */
+              <div>
+                <Model3DViewer
+                  modelUrl={arAsset.modelUrl}
+                  iosModelUrl={arAsset.iosModelUrl}
+                  previewImage={arAsset.previewImage || item.image}
+                  name={item.name}
+                  scale={arAsset.scale}
+                  onEvent={handleArEvent}
+                />
+                {/* Favorite button overlaid */}
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(item.id)}
+                  aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  className={`absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md transition ${
+                    isFavorite
+                      ? 'border-red-400/30 bg-red-500/10 text-red-400'
+                      : 'border-white/10 bg-black/55 text-white hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]'
+                  }`}
+                >
+                  <Heart className="h-5 w-5" fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+            ) : (
+              /* No AR asset — standard image */
+              <div className="relative overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--bg-card)]">
+                <div className="aspect-[4/3] min-h-[320px]">
+                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                </div>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-            {item.badge && (
-              <div className="absolute left-4 top-4 rounded-full border border-[var(--accent-gold)]/30 bg-black/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent-gold)] backdrop-blur-md">
-                {item.badge}
+                {item.badge && (
+                  <div className="absolute left-4 top-4 rounded-full border border-[var(--accent-gold)]/30 bg-black/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent-gold)] backdrop-blur-md">
+                    {item.badge}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(item.id)}
+                  aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  className={`absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md transition ${
+                    isFavorite
+                      ? 'border-red-400/30 bg-red-500/10 text-red-400'
+                      : 'border-white/10 bg-black/55 text-white hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]'
+                  }`}
+                >
+                  <Heart className="h-5 w-5" fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={() => toggleFavorite(item.id)}
-              aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              className={`absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md transition ${
-                isFavorite
-                  ? 'border-red-400/30 bg-red-500/10 text-red-400'
-                  : 'border-white/10 bg-black/55 text-white hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)]'
-              }`}
-            >
-              <Heart className="h-5 w-5" fill={isFavorite ? 'currentColor' : 'none'} />
-            </button>
           </div>
 
           {/* Content */}

@@ -37,6 +37,15 @@ export const SOCKET_EVENTS = {
 
   // ── System events
   SYSTEM_ERROR: 'system.error',
+
+  // ── AR / 3D Visualization events (Phase 4)
+  AR_VIEWER_OPENED: 'ar.viewer.opened',
+  AR_MODEL_LOADED: 'ar.model.loaded',
+  AR_SESSION_STARTED: 'ar.session.started',
+  AR_SESSION_ENDED: 'ar.session.ended',
+  AR_FAILED: 'ar.failed',
+  VIEW3D_OPENED: 'view3d.opened',
+  MENU_ITEM_VISUALIZED: 'menu_item.visualized',
 } as const;
 
 export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];

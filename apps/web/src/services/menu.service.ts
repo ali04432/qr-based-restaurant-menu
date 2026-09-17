@@ -84,7 +84,7 @@ export const menuService = {
     categories: MenuCategory[];
     items: MenuItem[];
   }> {
-    const restId = restaurantId || 'a0000000-0000-0000-0000-000000000001';
+    const restId = restaurantId || 'ffed1622-07e2-4b76-a0e7-5de417637740';
 
     try {
       const url = new URL(`${API_BASE}/api/menu`);

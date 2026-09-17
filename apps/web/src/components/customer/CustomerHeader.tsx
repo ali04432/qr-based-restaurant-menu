@@ -27,7 +27,7 @@ export function CustomerHeader({
 }: CustomerHeaderProps) {
   const { tableNumber } = useTableContext();
   const { theme, toggleTheme } = useThemeContext();
-  const { items } = useCartContext();
+  const { items, openDrawer } = useCartContext();
 
   const [searchValue, setSearchValue] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] =
@@ -63,16 +63,8 @@ export function CustomerHeader({
   };
 
   const openCart = () => {
-    /*
-     * We intentionally avoid depending on a specific
-     * CartContext drawer method because your local
-     * CartContext API differs from the repository snapshot.
-     *
-     * CartDrawer can listen to this event globally.
-     */
-    window.dispatchEvent(
-      new CustomEvent('customer:cart-open')
-    );
+    // Open the cart drawer directly via CartContext state
+    openDrawer();
   };
 
   const openNotifications = () => {

@@ -31,21 +31,11 @@ export default function AdminLoginPage() {
       await login({ email, password });
       router.push('/admin');
     } catch (err: any) {
-      console.warn('[AdminLogin] Direct login failed, creating authenticated session fallback:', err);
-      // Fallback session creation for demo/production readiness
-      const token = `staff-token-${Date.now()}`;
-      localStorage.setItem('qr_staff_token', token);
-      localStorage.setItem(
-        'qr_user_session',
-        JSON.stringify({
-          id: `usr-${Date.now()}`,
-          restaurantId: '1',
-          name: selectedRole === UserRole.ADMIN ? 'Restaurant Admin' : `${selectedRole} Staff`,
-          email,
-          role: selectedRole,
-        })
-      );
-      window.location.href = '/admin';
+      // Show the actual error — do NOT create a fake session bypass
+      const message =
+        err?.message ||
+        'Login failed. Please check your credentials and ensure the server is running.';
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }

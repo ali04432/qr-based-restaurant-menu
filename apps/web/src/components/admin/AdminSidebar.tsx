@@ -31,6 +31,7 @@ import {
   LogOut,
   X,
   UserCheck,
+  Box,
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { UserRole } from '@qr-menu/shared';
@@ -143,6 +144,12 @@ const NAV_ITEMS: NavItem[] = [
     name: 'AI Business Assistant',
     href: '/admin/ai',
     icon: Bot,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
+  },
+  {
+    name: 'AR / 3D Assets',
+    href: '/admin/ar',
+    icon: Box,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
   },
   {

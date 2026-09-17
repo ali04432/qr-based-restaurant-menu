@@ -340,3 +340,134 @@ export interface SystemHealthStatus {
   jobsWorker: { status: 'healthy' | 'degraded'; pendingJobs: number; failedRecent: number };
   integrations: Array<{ providerType: ProviderType; isEnabled: boolean; status: string }>;
 }
+
+// ============================================================
+// AR & 3D Visualization Types (Phase 4 — AR Infrastructure)
+// ============================================================
+
+export type ArAssetType = 'MODEL_3D' | 'AR_GLTF' | 'AR_USDZ';
+export type ArAssetStatus = 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+
+export interface ArAsset {
+  id: string;
+  restaurantId: string;
+  menuItemId?: string | null;
+  name: string;
+  assetType: ArAssetType;
+  modelUrl: string;
+  iosModelUrl?: string | null;
+  previewImage?: string | null;
+  mimeType: string;
+  fileSize?: number | null;
+  scale: number;
+  status: ArAssetStatus;
+  metadata?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArAssetWithItem extends ArAsset {
+  menuItem?: {
+    id: string;
+    name: string;
+    price: number;
+    image?: string | null;
+  } | null;
+}
+
+export interface CreateArAssetInput {
+  menuItemId?: string;
+  name: string;
+  assetType?: ArAssetType;
+  modelUrl: string;
+  iosModelUrl?: string;
+  previewImage?: string;
+  mimeType?: string;
+  fileSize?: number;
+  scale?: number;
+  status?: ArAssetStatus;
+  metadata?: string;
+}
+
+export interface UpdateArAssetInput {
+  name?: string;
+  assetType?: ArAssetType;
+  modelUrl?: string;
+  iosModelUrl?: string;
+  previewImage?: string;
+  mimeType?: string;
+  fileSize?: number;
+  scale?: number;
+  status?: ArAssetStatus;
+  metadata?: string;
+}
+
+export type VisualizationEventType =
+  | 'ar.viewer.opened'
+  | 'ar.model.loaded'
+  | 'ar.session.started'
+  | 'ar.session.ended'
+  | 'ar.failed'
+  | 'view3d.opened'
+  | 'view3d.rotated'
+  | 'view3d.zoomed';
+
+export interface VisualizationEvent {
+  id: string;
+  restaurantId: string;
+  menuItemId?: string | null;
+  assetId?: string | null;
+  sessionId?: string | null;
+  eventType: VisualizationEventType;
+  deviceType?: string | null;
+  arSupported: boolean;
+  metadata?: string | null;
+  createdAt: string;
+}
+
+export interface TrackVisualizationInput {
+  menuItemId?: string;
+  assetId?: string;
+  sessionId?: string;
+  eventType: VisualizationEventType;
+  deviceType?: string;
+  arSupported?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+// ============================================================
+// AI Service Layer Types (Phase 4 — Swappable AI Provider)
+// ============================================================
+
+export interface AiQueryRequest {
+  restaurantId: string;
+  query: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AiQueryResponse {
+  reply: string;
+  provider: 'gemini' | 'heuristic';
+  timestamp: string;
+  metricsSummary?: {
+    todayRevenue: number;
+    todayOrders: number;
+    weekRevenue: number;
+    weekProfit: number;
+    lowStockCount: number;
+  };
+}
+
+export interface AiRecommendationItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  image?: string | null;
+  badge?: string | null;
+  score: number;
+  reason: string;
+  hasArAsset: boolean;
+  arAssetId?: string | null;
+}
+

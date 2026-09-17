@@ -20,7 +20,8 @@ export type JobType =
   | 'INVENTORY_REORDER_ALERT'
   | 'INVOICE_EMAIL'
   | 'WHATSAPP_NOTIFICATION'
-  | 'SMS_NOTIFICATION';
+  | 'SMS_NOTIFICATION'
+  | 'AI_INSIGHT_REFRESH';
 
 export interface EnqueueOptions {
   restaurantId?: string;
@@ -96,6 +97,39 @@ registerJobHandler('SMS_NOTIFICATION', async (payload, restaurantId) => {
   const { to, message } = payload as Record<string, string>;
   console.log(`[JobQueue] Sending SMS to ${to}`);
   return { success: true, output: { to, message } };
+});
+
+/**
+ * AI_INSIGHT_REFRESH — Pre-compute all three passive AI pillars for a restaurant.
+ * Triggered on a schedule so the /ai/dashboard endpoint returns near-instant results.
+ * The job itself does not cache yet — caching can be layered on top via Redis later.
+ */
+registerJobHandler('AI_INSIGHT_REFRESH', async (payload, restaurantId) => {
+  const rid = (payload.restaurantId as string) || restaurantId;
+  if (!rid) return { success: false, error: 'restaurantId required for AI_INSIGHT_REFRESH' };
+
+  // Lazy import to avoid circular dependency at module load time
+  const { runOperationsPillar, runAnalyticsPillar, runOptimizationPillar } = await import('./ai/ai.service');
+
+  const [operations, analytics, optimization] = await Promise.all([
+    runOperationsPillar(rid),
+    runAnalyticsPillar(rid),
+    runOptimizationPillar(rid),
+  ]);
+
+  console.log(`[JobQueue] AI_INSIGHT_REFRESH completed for restaurant ${rid} — ` +
+    `ops:${operations.confidence} analytics:${analytics.confidence} opt:${optimization.confidence}`);
+
+  return {
+    success: true,
+    output: {
+      restaurantId: rid,
+      operations: { confidence: operations.confidence, recommendations: operations.recommendations?.length ?? 0 },
+      analytics: { confidence: analytics.confidence, recommendations: analytics.recommendations?.length ?? 0 },
+      optimization: { confidence: optimization.confidence, recommendations: optimization.recommendations?.length ?? 0 },
+      generatedAt: new Date().toISOString(),
+    },
+  };
 });
 
 // ──────────────────────────────────────────────────────────

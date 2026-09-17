@@ -38,6 +38,10 @@ import {
   Subscription,
   AuditLog,
   SystemHealthStatus,
+  ArAsset,
+  CreateArAssetInput,
+  UpdateArAssetInput,
+  VisualizationEvent,
 } from '@qr-menu/shared';
 import { apiClient } from '../lib/api-client';
 
@@ -349,9 +353,36 @@ export const adminService = {
     return apiClient.patch('/api/admin/notifications/read-all', {}, { token });
   },
 
-  // ── Admin AI Assistant
+  // ── Admin AI Assistant (legacy)
   async queryAdminAI(restaurantId: string, query: string, token: string): Promise<{ reply: string; timestamp: string; metricsSummary?: any }> {
     return apiClient.post('/api/admin/ai/query', { restaurantId, query }, { token });
+  },
+
+  // ── Phase 5: AI Intelligence Engine — 4-Pillar API ──────────
+
+  /** Pillar 1: Natural-language assistant (Phase 5 envelope) */
+  async aiAssistant(restaurantId: string, query: string, token: string): Promise<any> {
+    return apiClient.post('/api/admin/ai/assistant', { restaurantId, query }, { token });
+  },
+
+  /** Pillar 2: Operations analysis (table utilization, peak hours, order flow) */
+  async aiOperations(restaurantId: string, token: string): Promise<any> {
+    return apiClient.get(`/api/admin/ai/operations?restaurantId=${restaurantId}`, { token });
+  },
+
+  /** Pillar 3: Revenue analytics, menu performance, and forecasting */
+  async aiAnalytics(restaurantId: string, token: string): Promise<any> {
+    return apiClient.get(`/api/admin/ai/analytics?restaurantId=${restaurantId}`, { token });
+  },
+
+  /** Pillar 4: Inventory, pricing, and menu optimizations */
+  async aiOptimization(restaurantId: string, token: string): Promise<any> {
+    return apiClient.get(`/api/admin/ai/optimization?restaurantId=${restaurantId}`, { token });
+  },
+
+  /** All-in-one dashboard: runs Operations + Analytics + Optimization concurrently */
+  async aiDashboard(restaurantId: string, token: string): Promise<any> {
+    return apiClient.get(`/api/admin/ai/dashboard?restaurantId=${restaurantId}`, { token });
   },
 
   // ── Settings
@@ -627,6 +658,39 @@ export const adminService = {
     if (params.limit) q.append('limit', String(params.limit));
 
     return apiClient.get(`/api/admin/customers?${q.toString()}`, { token });
+  },
+
+  // ── AR & 3D Visualization Management (Phase 4)
+  async getArAssets(token?: string | null): Promise<ArAsset[]> {
+    return apiClient.get('/api/admin/ar/assets', { token: token || undefined });
+  },
+
+  async getArAsset(id: string, token?: string | null): Promise<ArAsset> {
+    return apiClient.get(`/api/admin/ar/assets/${id}`, { token: token || undefined });
+  },
+
+  async createArAsset(data: CreateArAssetInput, token?: string | null): Promise<ArAsset> {
+    return apiClient.post('/api/admin/ar/assets', data, { token: token || undefined });
+  },
+
+  async updateArAsset(id: string, data: UpdateArAssetInput, token?: string | null): Promise<ArAsset> {
+    return apiClient.put(`/api/admin/ar/assets/${id}`, data, { token: token || undefined });
+  },
+
+  async deleteArAsset(id: string, token?: string | null): Promise<{ message: string }> {
+    return apiClient.delete(`/api/admin/ar/assets/${id}`, { token: token || undefined });
+  },
+
+  async getArAnalytics(days: number = 7, token?: string | null): Promise<{
+    periodDays: number;
+    totalEvents: number;
+    byEventType: Record<string, number>;
+    byDevice: Record<string, number>;
+    arSupportedCount: number;
+    arUnsupportedCount: number;
+    recentEvents: VisualizationEvent[];
+  }> {
+    return apiClient.get(`/api/admin/ar/analytics?days=${days}`, { token: token || undefined });
   },
 };
 

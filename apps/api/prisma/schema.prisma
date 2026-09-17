@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -153,6 +154,10 @@ model Restaurant {
   integrationConfigs  IntegrationConfig[]
   customerRequests    CustomerRequest[]
   paymentRefunds      PaymentRefund[]
+  arAssets            ArAsset[]
+  visualizationEvents VisualizationEvent[]
+  events              Event[]
+  orderEvents         OrderEvent[]
 
   @@map("restaurants")
 }
@@ -175,6 +180,7 @@ model Branch {
   tables     Table[]
   orders     Order[]
   auditLogs  AuditLog[]
+  events     Event[]
 
   @@unique([restaurantId, code])
   @@index([restaurantId])
@@ -202,6 +208,7 @@ model User {
   processedPayments Payment[]        @relation("ProcessedPayments")
   paymentRefunds    PaymentRefund[]
   assignedRequests  CustomerRequest[] @relation("AssignedRequests")
+  orderEvents       OrderEvent[]
 
   @@index([restaurantId])
   @@index([branchId])
@@ -290,6 +297,7 @@ model MenuItem {
   inventory         Inventory[]
   aiRecommendations AiRecommendation[]
   rewards           Reward[]
+  arAsset           ArAsset?
 
   @@index([restaurantId])
   @@index([categoryId])
@@ -339,6 +347,7 @@ model Order {
   items            OrderItem[]
   payments         Payment[]
   feedbacks        Feedback[]
+  orderEvents      OrderEvent[]
 
   @@unique([restaurantId, orderNumber])
   @@index([restaurantId])
@@ -837,3 +846,108 @@ model IntegrationConfig {
   @@index([restaurantId])
   @@map("integration_configs")
 }
+
+// ============================================================
+// AR & 3D Visualization Infrastructure (Phase 4)
+// ============================================================
+
+model ArAsset {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  menuItemId   String?  @unique @map("menu_item_id")
+  name         String   @db.VarChar(150)
+  assetType    String   @default("MODEL_3D") @map("asset_type") // MODEL_3D | AR_GLTF | AR_USDZ
+  modelUrl     String   @map("model_url") @db.Text
+  iosModelUrl  String?  @map("ios_model_url") @db.Text
+  previewImage String?  @map("preview_image") @db.Text
+  mimeType     String   @default("model/gltf-binary") @map("mime_type") @db.VarChar(100)
+  fileSize     Int?     @map("file_size")
+  scale        Float    @default(1.0)
+  status       String   @default("ACTIVE") @db.VarChar(30) // ACTIVE | INACTIVE | DRAFT
+  metadata     String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItem            MenuItem?            @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  visualizationEvents VisualizationEvent[]
+
+  @@index([restaurantId])
+  @@index([menuItemId])
+  @@map("ar_assets")
+}
+
+model VisualizationEvent {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  menuItemId   String?  @map("menu_item_id")
+  assetId      String?  @map("asset_id")
+  sessionId    String?  @map("session_id") @db.VarChar(100)
+  eventType    String   @map("event_type") @db.VarChar(50) // ar.viewer.opened | ar.model.loaded | ar.started | ar.failed
+  deviceType   String?  @map("device_type") @db.VarChar(50)
+  arSupported  Boolean  @default(false) @map("ar_supported")
+  metadata     String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  asset      ArAsset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([menuItemId])
+  @@index([assetId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("visualization_events")
+}
+
+// ============================================================
+// Phase 6 - Events & Order Timelines
+// ============================================================
+
+model Event {
+  id           String    @id @default(uuid())
+  restaurantId String    @map("restaurant_id")
+  branchId     String?   @map("branch_id")
+  name         String    @db.VarChar(150)
+  description  String?   @db.Text
+  eventType    String    @default("GENERAL") @map("event_type") // e.g. HAPPY_HOUR, PROMOTION, PRIVATE_PARTY, MAINTENANCE
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime  @map("end_date")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([branchId])
+  @@index([startDate, endDate])
+  @@map("events")
+}
+
+model OrderEvent {
+  id           String    @id @default(uuid())
+  restaurantId String    @map("restaurant_id")
+  orderId      String    @map("order_id")
+  userId       String?   @map("user_id") // Nullable for automated/system-triggered events
+  statusFrom   String?   @map("status_from") @db.VarChar(50) // The order status before this event
+  statusTo     String    @map("status_to") @db.VarChar(50)   // The order status after this event
+  eventType    String    @default("STATE_CHANGE") @map("event_type") // STATE_CHANGE, PAYMENT_UPDATE, NOTE_ADDED
+  metadata     String?   @db.Text // JSON string for extra info (e.g. refund reason, payment ref)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("order_events")
+}
+

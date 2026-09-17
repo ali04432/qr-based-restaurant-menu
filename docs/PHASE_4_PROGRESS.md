@@ -97,6 +97,14 @@ Last Updated: Phase 4 100% Completed (Milestones 1 through 10 Verified & Product
   - Added `yesterday` and `last_month` date range support across Analytics endpoints.
   - Validated zero regressions across customer ordering flow (`/menu`, `/checkout`, `/orders/track`) and kitchen display system (`/kds`).
   - Monorepo full compilation check: zero TypeScript errors across `@qr-menu/api`, `@qr-menu/web`, and `@qr-menu/shared`.
-  - Next.js production build: all 39 static routes generated successfully with optimal bundle sizes.
+  - Next.js production build: all 50 routes generated successfully with optimal bundle sizes.
+- [x] **Milestone 11: AR & 3D Visualization Infrastructure & Swappable AI Service Layer**
+  - **Prisma Models & Schema Expansion**: Created `ArAsset` (with GLTF/USDZ asset type, model URLs, scale, preview image, status) and `VisualizationEvent` (telemetry session tracking with device type and WebXR support) in `apps/api/prisma/schema.prisma` and generated Prisma Client v5.22.
+  - **Backend AR Service & Routes**: Created `ar-visualization.service.ts` and `apps/api/src/routes/admin/ar.routes.ts` (`/api/admin/ar/assets`, `/api/admin/ar/analytics`, `/api/admin/ar/track`), plus public customer endpoint `GET /api/menu/items/:id/ar-asset`.
+  - **Swappable AI Service Layer**: Implemented `ai.service.ts` with swappable `IAIProvider` interface, automated fallback from Google Gemini API to high-accuracy SQL heuristic aggregation when API keys are absent or rate-limited.
+  - **Frontend 3D & AR Viewer**: Built `Model3DViewer.tsx` using Google `<model-viewer>` with WebXR and Apple AR QuickLook `.usdz` integration, orbit controls, zoom, fullscreen mode, and telemetry event dispatching.
+  - **Admin AR Console**: Built `/admin/ar` management console featuring active asset KPI cards, interactive 3D model test modal, asset creation/editing, and telemetry breakdown charts by device and event type.
+  - **Production Verification**: Zero compilation errors across `@qr-menu/api`, `@qr-menu/web`, and `@qr-menu/shared`; all 50 Next.js pages prerendered successfully.
+
 
 

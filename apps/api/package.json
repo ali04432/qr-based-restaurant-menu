@@ -9,7 +9,7 @@
     "build": "tsc --project tsconfig.json",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio"

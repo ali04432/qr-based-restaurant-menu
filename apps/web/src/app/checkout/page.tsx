@@ -165,11 +165,11 @@ export default function CheckoutPage() {
 
             const request: CustomerOrderRequest = {
                 restaurantId: String(
-                    restaurantId || 'a0000000-0000-0000-0000-000000000001'
+                    restaurantId || 'ffed1622-07e2-4b76-a0e7-5de417637740'
                 ),
 
                 tableId: String(
-                    tableId || 'b0000001-0000-0000-0000-000000000001'
+                    tableId || '8c1f492d-1f8e-48c2-8d24-0cd36985d67b'
                 ),
 
                 customerPhone: customerInfo.phone ? customerInfo.phone.trim() : undefined,
