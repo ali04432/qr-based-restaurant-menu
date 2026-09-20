@@ -171,15 +171,15 @@ export default function AdminLoyaltyPage() {
 
   const handleOpenEditReward = (r: Reward) => {
     setEditingReward(r);
-    setRewardName(r.name);
+    setRewardName(r.name || r.title || '');
     setRewardDescription(r.description || '');
-    setRewardType(r.rewardType);
+    setRewardType((r.rewardType as RewardType) || r.type || 'DISCOUNT_PERCENT');
     setRewardValue(r.discountValue);
     setRewardMenuItemId(r.menuItemId || '');
     setRewardPointsCost(r.pointsCost);
-    setRewardMinOrder(r.minOrderAmount);
-    setRewardExpiryDays(r.expiryDays);
-    setRewardIsActive(r.isActive);
+    setRewardMinOrder(r.minOrderAmount || 0);
+    setRewardExpiryDays(r.expiryDays || 30);
+    setRewardIsActive(r.isActive ?? true);
     setFormError('');
     setRewardModalOpen(true);
   };
@@ -524,7 +524,7 @@ export default function AdminLoyaltyPage() {
                               {r.pointsCost.toLocaleString()} pts
                             </td>
                             <td className="py-3 px-4 text-right font-mono text-slate-600">
-                              {r.minOrderAmount > 0 ? `Rs. ${r.minOrderAmount.toLocaleString()}` : 'None'}
+                              {(r.minOrderAmount || 0) > 0 ? `Rs. ${(r.minOrderAmount || 0).toLocaleString()}` : 'None'}
                             </td>
                             <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
                               {r.expiryDays} days
@@ -550,7 +550,7 @@ export default function AdminLoyaltyPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteReward(r.id, r.name)}
+                                  onClick={() => handleDeleteReward(r.id, r.name || r.title || '')}
                                   className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition"
                                   title="Delete Reward"
                                 >

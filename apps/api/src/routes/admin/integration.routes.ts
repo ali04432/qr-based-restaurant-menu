@@ -156,7 +156,7 @@ router.post(
 
       let testResult: any;
 
-      switch (providerType) {
+      switch (providerType as string) {
         case 'WHATSAPP': {
           testResult = await WhatsAppService.send(parsedConfig as any, {
             to: recipient || '+923001234567',

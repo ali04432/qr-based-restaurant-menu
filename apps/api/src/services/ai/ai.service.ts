@@ -806,7 +806,7 @@ export async function runOptimizationPillar(
       }
     }
   });
-  pricingOpportunities.sort((a, b) => b.estimatedRevenueImpact - a.estimatedRevenueImpact);
+  pricingOpportunities.sort((a, b) => (b.estimatedRevenueImpact ?? 0) - (a.estimatedRevenueImpact ?? 0));
 
   // ── Menu Optimizations ───────────────────────────────────────
   const menuOptimizations: OptimizationAIData['menuOptimizations'] = [];
@@ -859,7 +859,7 @@ export async function runOptimizationPillar(
     });
   }
   if (pricingOpportunities.length > 0) {
-    const totalImpact = pricingOpportunities.reduce((s, p) => s + p.estimatedRevenueImpact, 0);
+    const totalImpact = pricingOpportunities.reduce((s, p) => s + (p.estimatedRevenueImpact ?? 0), 0);
     recommendations.push({
       id: makeId(),
       category: 'revenue',
@@ -876,7 +876,7 @@ export async function runOptimizationPillar(
     `• **Inventory Alerts:** ${inventoryOptimizations.length} item(s) below threshold`,
     `• **Pricing Opportunities:** ${pricingOpportunities.length} item(s) could be repriced for better margins`,
     `• **Menu Actions:** ${menuOptimizations.length} suggested changes (promote, bundle, or retire)`,
-    `• **Operational Savings:** Rs. ${operationalSavings.reduce((s, o) => s + o.potentialSavingRs, 0).toLocaleString()} estimated`,
+    `• **Operational Savings:** Rs. ${operationalSavings.reduce((s: number, o: { potentialSavingRs: number }) => s + o.potentialSavingRs, 0).toLocaleString()} estimated`,
   ];
 
   return {

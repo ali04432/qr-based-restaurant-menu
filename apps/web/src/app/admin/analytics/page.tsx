@@ -178,11 +178,11 @@ export default function AdminAnalyticsPage() {
             {analytics?.revenueTrend && analytics.revenueTrend.length > 0 ? (
               analytics.revenueTrend.map((t, idx) => {
                 const maxVal = Math.max(
-                  ...analytics.revenueTrend.map((b) => b.revenue),
+                  ...(analytics.revenueTrend || []).map((b) => b.revenue),
                   1000
                 );
                 const revHeight = Math.max(12, Math.round((t.revenue / maxVal) * 100));
-                const profitHeight = Math.max(8, Math.round((t.profit / maxVal) * 100));
+                const profitHeight = Math.max(8, Math.round(((t.profit || 0) / maxVal) * 100));
 
                 return (
                   <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
@@ -380,7 +380,7 @@ export default function AdminAnalyticsPage() {
               </p>
             </div>
             <span className="text-xs font-bold text-amber-400 font-mono">
-              7-Day Predicted Orders: {forecast.predictedOrdersNext7Days ?? (forecast.next7DaysForecast ? forecast.next7DaysForecast.reduce((acc, d) => acc + d.predictedOrders, 0) : forecast.predictedOrderVolumeTomorrow * 7)}
+              7-Day Predicted Orders: {forecast.predictedOrdersNext7Days ?? (forecast.next7DaysForecast ? forecast.next7DaysForecast.reduce((acc, d) => acc + d.predictedOrders, 0) : (forecast.predictedOrderVolumeTomorrow || 0) * 7)}
             </span>
           </div>
 

@@ -135,7 +135,7 @@ router.post(
       }
 
       const list = promotionsStore.get(restaurantId) || [];
-      const code = parsed.data.code.toUpperCase().trim();
+      const code = parsed.data.code?.toUpperCase().trim() || `PROMO-${Math.floor(Math.random() * 10000)}`;
 
       if (list.some((p) => p.code === code)) {
         return next(new AppError(`Promo code "${code}" already exists`, 409, 'CONFLICT'));
@@ -146,7 +146,7 @@ router.post(
         restaurantId,
         name: parsed.data.name,
         code,
-        discountType: parsed.data.discountType,
+        discountType: (parsed.data.discountType as 'PERCENTAGE' | 'FIXED') || 'PERCENTAGE',
         discountValue: parsed.data.discountValue,
         minOrderAmount: parsed.data.minOrderAmount ?? 0,
         startDate: parsed.data.startDate || undefined,

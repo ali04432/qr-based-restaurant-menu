@@ -151,7 +151,7 @@ export default function AdminBranchesPage() {
           editingBranch.id,
           {
             name: formData.name,
-            code: formData.code.toUpperCase(),
+            code: (formData.code || '').toUpperCase(),
             address: formData.address || undefined,
             phone: formData.phone || undefined,
             email: formData.email || undefined,
@@ -165,7 +165,7 @@ export default function AdminBranchesPage() {
           {
             restaurantId,
             name: formData.name,
-            code: formData.code.toUpperCase(),
+            code: (formData.code || '').toUpperCase(),
             address: formData.address || undefined,
             phone: formData.phone || undefined,
             email: formData.email || undefined,

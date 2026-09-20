@@ -5,7 +5,7 @@
   "description": "Express.js REST API and Socket.io server for QR Restaurant Menu",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child -r tsconfig-paths/register src/index.ts",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
@@ -34,8 +34,9 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.5",
-    "prisma": "^5.8.1",
+    "prisma": "^5.22.0",
     "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^3.15.0",
     "typescript": "^5.3.3"
   }
 }

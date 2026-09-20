@@ -124,7 +124,7 @@ export default function AdminArPage() {
     setMenuItemId(asset.menuItemId || '');
     setName(asset.name);
     setAssetType((asset.assetType as any) || 'MODEL_3D');
-    setModelUrl(asset.modelUrl);
+    setModelUrl(asset.modelUrl || '');
     setIosModelUrl(asset.iosModelUrl || '');
     setPreviewImage(asset.previewImage || '');
     setScale(asset.scale || 1.0);
@@ -473,7 +473,7 @@ export default function AdminArPage() {
                         {/* Footer Actions */}
                         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                           <button
-                            onClick={() => handleCopy(asset.modelUrl, asset.id)}
+                            onClick={() => handleCopy(asset.modelUrl || '', asset.id)}
                             className="px-2.5 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs flex items-center gap-1.5 transition"
                             title="Copy Model URL"
                           >
@@ -636,7 +636,7 @@ export default function AdminArPage() {
                               {evt.sessionId || 'anonymous'}
                             </td>
                             <td className="py-2.5 px-3 text-slate-400">
-                              {new Date(evt.createdAt).toLocaleString()}
+                              {new Date(evt.createdAt || evt.timestamp || Date.now()).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -860,7 +860,7 @@ export default function AdminArPage() {
 
               <div className="p-6 bg-slate-950 flex items-center justify-center min-h-[420px]">
                 <Model3DViewer
-                  modelUrl={previewAsset.modelUrl}
+                  modelUrl={previewAsset.modelUrl || ''}
                   iosModelUrl={previewAsset.iosModelUrl}
                   previewImage={previewAsset.previewImage}
                   name={previewAsset.name}

@@ -49,7 +49,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const newFeedback: FeedbackRecord = {
       id: randomUUID(),
-      restaurantId,
+      restaurantId: restaurantId || '',
       orderId: orderId || undefined,
       orderNumber,
       tableNumber: tableNumber || undefined,
@@ -77,12 +77,12 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       // Fallback
     }
 
-    const list = feedbackStore.get(restaurantId) || [];
+    const list = feedbackStore.get(restaurantId || '') || [];
     list.unshift(newFeedback);
-    feedbackStore.set(restaurantId, list);
+    feedbackStore.set(restaurantId || '', list);
 
     try {
-      emitToRestaurant(restaurantId, 'feedback.created', newFeedback);
+      emitToRestaurant(restaurantId || '', 'feedback.created', newFeedback);
     } catch (e) {
       console.warn('[Socket] Could not broadcast feedback', e);
     }

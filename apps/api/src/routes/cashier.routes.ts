@@ -244,7 +244,7 @@ router.post('/payments/confirm', async (req: AuthenticatedRequest, res: Response
       return next(new AppError(parsed.error.errors[0].message, 400, 'VALIDATION_ERROR'));
     }
 
-    const { orderId, method, amount, receivedAmount, changeAmount, transactionRef, notes } = parsed.data;
+    const { orderId, method, receivedAmount, changeAmount, transactionRef, notes } = parsed.data;
 
     const order = await prisma.order.findFirst({
       where: { id: orderId, restaurantId },
@@ -252,6 +252,8 @@ router.post('/payments/confirm', async (req: AuthenticatedRequest, res: Response
     });
 
     if (!order) return next(new AppError('Order not found', 404, 'NOT_FOUND'));
+
+    const amount = parsed.data.amount ?? order.total;
 
     if (order.paymentStatus === 'COMPLETED') {
       return next(new AppError('This order has already been paid in full', 400, 'ALREADY_PAID'));
@@ -509,7 +511,7 @@ router.post('/payments/:id/refund', async (req: AuthenticatedRequest, res: Respo
       return next(new AppError(parsed.error.errors[0].message, 400, 'VALIDATION_ERROR'));
     }
 
-    const { amount, reason, method = 'CASH' } = parsed.data;
+    const { reason, method = 'CASH' } = parsed.data;
 
     const payment = await prisma.payment.findFirst({
       where: { id, restaurantId },
@@ -522,6 +524,8 @@ router.post('/payments/:id/refund', async (req: AuthenticatedRequest, res: Respo
       return next(new AppError('This payment has already been refunded', 400, 'ALREADY_REFUNDED'));
     }
 
+    const amount = parsed.data.amount ?? payment.amount;
+
     if (amount > payment.amount) {
       return next(new AppError(`Refund amount cannot exceed original payment of Rs. ${payment.amount}`, 400, 'INVALID_AMOUNT'));
     }
@@ -532,7 +536,7 @@ router.post('/payments/:id/refund', async (req: AuthenticatedRequest, res: Respo
           restaurantId,
           paymentId: id,
           amount,
-          reason,
+          reason: reason ?? '',
           method,
           staffId: req.user!.id,
         },

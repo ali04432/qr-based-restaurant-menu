@@ -77,7 +77,7 @@ export default function AdminFeedbackPage() {
   };
 
   const getBarWidth = (count: number) => {
-    if (!summary || summary.totalReviews === 0) return '0%';
+    if (!summary || !summary.totalReviews) return '0%';
     return `${(count / summary.totalReviews) * 100}%`;
   };
 
@@ -137,7 +137,7 @@ export default function AdminFeedbackPage() {
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Positive (4-5★)</p>
                   <p className="text-2xl font-bold text-slate-900">
-                    {summary
+                    {summary && summary.ratingBreakdown
                       ? (summary.ratingBreakdown[4] || 0) + (summary.ratingBreakdown[5] || 0)
                       : 0}
                   </p>
@@ -154,7 +154,7 @@ export default function AdminFeedbackPage() {
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Negative (1-2★)</p>
                   <p className="text-2xl font-bold text-slate-900">
-                    {summary
+                    {summary && summary.ratingBreakdown
                       ? (summary.ratingBreakdown[1] || 0) + (summary.ratingBreakdown[2] || 0)
                       : 0}
                   </p>
@@ -171,7 +171,7 @@ export default function AdminFeedbackPage() {
             </div>
             <div className="space-y-3">
               {[5, 4, 3, 2, 1].map((star) => {
-                const count = summary?.ratingBreakdown[star] || 0;
+                const count = (summary?.ratingBreakdown && summary.ratingBreakdown[star as any]) || 0;
                 const isActive = filterRating === star;
                 return (
                   <button

@@ -132,11 +132,11 @@ router.patch(
       let newStock = currentStock;
 
       if (adjustmentType === 'SET') {
-        newStock = quantity;
+        newStock = quantity || 0;
       } else if (adjustmentType === 'INCREASE') {
-        newStock = currentStock + quantity;
+        newStock = currentStock + (quantity || 0);
       } else if (adjustmentType === 'DECREASE') {
-        newStock = currentStock - quantity;
+        newStock = currentStock - (quantity || 0);
         if (newStock < 0) {
           return next(new AppError(`Cannot decrease stock below zero. Current stock is ${currentStock}.`, 400, 'INVALID_QUANTITY'));
         }

@@ -448,8 +448,8 @@ export default function AdminAuditPage() {
 
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          {getEntityIcon(log.entity)}
-                          {log.entity}
+                          {getEntityIcon(log.entity || '')}
+                          {log.entity || '—'}
                         </span>
                       </td>
 
@@ -463,8 +463,8 @@ export default function AdminAuditPage() {
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-400" title={log.details || ''}>
-                        {log.details || '—'}
+                      <td className="py-3.5 px-4 max-w-xs truncate text-xs text-zinc-400" title={String(log.details || '')}>
+                        {log.details ? String(log.details) : '—'}
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap text-xs text-zinc-500 font-mono">
@@ -555,7 +555,7 @@ export default function AdminAuditPage() {
                 <div className="bg-zinc-800/40 p-3 rounded-xl border border-zinc-800">
                   <span className="text-zinc-500 block mb-1">Details & Payload:</span>
                   <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 font-mono text-zinc-300 whitespace-pre-wrap">
-                    {selectedLog.details || 'No additional payload provided.'}
+                    {log.details ? String(log.details) : 'No additional payload provided.'}
                   </div>
                 </div>
               </div>
@@ -666,7 +666,7 @@ export default function AdminAuditPage() {
                       <p className="text-xs text-zinc-500 italic">No external integrations configured yet.</p>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {health.integrations.map((item, idx) => (
+                        {health.integrations.map((item: any, idx: number) => (
                           <div
                             key={idx}
                             className="bg-zinc-800/30 p-2.5 rounded-lg border border-zinc-800 flex items-center justify-between text-xs"

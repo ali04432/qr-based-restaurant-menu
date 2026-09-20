@@ -408,7 +408,7 @@ router.post('/orders/walk-in', async (req: AuthenticatedRequest, res: Response, 
     const table = await prisma.table.findFirst({ where: { id: tableId, restaurantId } });
     if (!table) return next(new AppError('Table not found', 404, 'NOT_FOUND'));
 
-    const menuItemIds = items.map((i) => i.menuItemId);
+    const menuItemIds = items.map((i: { menuItemId: string; quantity: number; notes?: string }) => i.menuItemId);
     const dbMenuItems = await prisma.menuItem.findMany({
       where: { id: { in: menuItemIds }, restaurantId },
     });
@@ -432,7 +432,7 @@ router.post('/orders/walk-in', async (req: AuthenticatedRequest, res: Response, 
 
     // Calculate totals
     let subtotal = 0;
-    const orderItemsData = items.map((reqItem) => {
+    const orderItemsData = items.map((reqItem: { menuItemId: string; quantity: number; notes?: string }) => {
       const dbItem = itemMap.get(reqItem.menuItemId)!;
       const itemSubtotal = dbItem.price * reqItem.quantity;
       subtotal += itemSubtotal;
@@ -443,7 +443,7 @@ router.post('/orders/walk-in', async (req: AuthenticatedRequest, res: Response, 
         unitPrice: dbItem.price,
         costPriceAtOrder: dbItem.costPrice ?? 0,
         subtotal: itemSubtotal,
-        specialInstructions: reqItem.specialInstructions ?? null,
+        specialInstructions: (reqItem as any).specialInstructions ?? reqItem.notes ?? null,
       };
     });
 
@@ -533,7 +533,7 @@ router.post('/orders/:id/add-items', async (req: AuthenticatedRequest, res: Resp
 
     if (!order) return next(new AppError('Order not found', 404, 'NOT_FOUND'));
 
-    const menuItemIds = items.map((i) => i.menuItemId);
+    const menuItemIds = items.map((i: { menuItemId: string; quantity: number; notes?: string }) => i.menuItemId);
     const dbMenuItems = await prisma.menuItem.findMany({
       where: { id: { in: menuItemIds }, restaurantId },
     });
@@ -541,7 +541,7 @@ router.post('/orders/:id/add-items', async (req: AuthenticatedRequest, res: Resp
     const itemMap = new Map(dbMenuItems.map((m) => [m.id, m]));
 
     let addedSubtotal = 0;
-    const itemsToCreate = items.map((reqItem) => {
+    const itemsToCreate = items.map((reqItem: { menuItemId: string; quantity: number; notes?: string }) => {
       const dbItem = itemMap.get(reqItem.menuItemId)!;
       const itemSubtotal = dbItem.price * reqItem.quantity;
       addedSubtotal += itemSubtotal;
@@ -553,7 +553,7 @@ router.post('/orders/:id/add-items', async (req: AuthenticatedRequest, res: Resp
         unitPrice: dbItem.price,
         costPriceAtOrder: dbItem.costPrice ?? 0,
         subtotal: itemSubtotal,
-        specialInstructions: reqItem.specialInstructions ?? null,
+        specialInstructions: (reqItem as any).specialInstructions ?? reqItem.notes ?? null,
       };
     });
 
@@ -699,10 +699,26 @@ router.patch('/orders/:id/status', async (req: AuthenticatedRequest, res: Respon
     const order = await prisma.order.findFirst({ where: { id, restaurantId }, include: { table: true } });
     if (!order) return next(new AppError('Order not found', 404, 'NOT_FOUND'));
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { status: status as any },
-      include: { items: true, table: true },
+    const updated = await prisma.$transaction(async (tx) => {
+      const up = await tx.order.update({
+        where: { id },
+        data: { status: status as any },
+        include: { items: true, table: true },
+      });
+      if (order.status !== status) {
+        await (tx as any).orderEvent.create({
+          data: {
+            restaurantId,
+            orderId: id,
+            userId: req.user?.id || null,
+            statusFrom: order.status,
+            statusTo: status as any,
+            eventType: 'STATUS_CHANGED',
+            metadata: JSON.stringify({ actorRole: req.user?.role || 'WAITER' })
+          }
+        });
+      }
+      return up;
     });
 
     await logStaffAction(
@@ -732,10 +748,24 @@ router.patch('/orders/:id/serve', async (req: AuthenticatedRequest, res: Respons
     const order = await prisma.order.findFirst({ where: { id, restaurantId }, include: { table: true } });
     if (!order) return next(new AppError('Order not found', 404, 'NOT_FOUND'));
 
-    const updated = await prisma.order.update({
-      where: { id },
-      data: { status: 'SERVED' as any },
-      include: { items: true, table: true },
+    const updated = await prisma.$transaction(async (tx) => {
+      const up = await tx.order.update({
+        where: { id },
+        data: { status: 'SERVED' as any },
+        include: { items: true, table: true },
+      });
+      await (tx as any).orderEvent.create({
+        data: {
+          restaurantId,
+          orderId: id,
+          userId: req.user?.id || null,
+          statusFrom: order.status,
+          statusTo: 'SERVED',
+          eventType: 'STATUS_CHANGED',
+          metadata: JSON.stringify({ actorRole: req.user?.role || 'WAITER' })
+        }
+      });
+      return up;
     });
 
     await logStaffAction(

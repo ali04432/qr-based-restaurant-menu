@@ -104,7 +104,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         costPriceAtOrder,
         quantity: reqItem.quantity,
         subtotal: itemSubtotal,
-        specialInstructions: reqItem.specialInstructions ?? null,
+        specialInstructions: (reqItem as any).specialInstructions ?? reqItem.notes ?? null,
       };
     });
 
@@ -214,6 +214,19 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           items: true,
           table: { select: { tableNumber: true } },
         },
+      });
+
+      // Record Order Creation Event
+      await (tx as any).orderEvent.create({
+        data: {
+          restaurantId,
+          orderId: order.id,
+          userId: req.user?.id || null,
+          statusFrom: null,
+          statusTo: 'RECEIVED',
+          eventType: 'ORDER_CREATED',
+          metadata: JSON.stringify({ paymentMethod, platform: 'CUSTOMER_APP' })
+        }
       });
 
       // If reward voucher was applied, mark it as REDEEMED
@@ -397,10 +410,29 @@ router.patch(
         return next(new AppError('Order not found', 404, 'NOT_FOUND'));
       }
 
-      const order = await prisma.order.update({
-        where: { id },
-        data: { status },
-        include: { items: true, table: { select: { tableNumber: true } } },
+      const order = await prisma.$transaction(async (tx) => {
+        const updated = await tx.order.update({
+          where: { id },
+          data: { status },
+          include: { items: true, table: { select: { tableNumber: true } } },
+        });
+
+        // Record status change event
+        if (existingOrder.status !== status) {
+          await (tx as any).orderEvent.create({
+            data: {
+              restaurantId: existingOrder.restaurantId,
+              orderId: existingOrder.id,
+              userId: req.user?.id || null,
+              statusFrom: existingOrder.status,
+              statusTo: status,
+              eventType: 'STATUS_CHANGED',
+              metadata: JSON.stringify({ actorRole: req.user?.role || 'SYSTEM' })
+            }
+          });
+        }
+        
+        return updated;
       });
 
       // ── Loyalty Points Accrual on Completion

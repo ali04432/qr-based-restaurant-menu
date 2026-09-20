@@ -76,7 +76,7 @@ router.post(
           restaurantId,
           name: name.trim(),
           description: description || null,
-          rewardType,
+          rewardType: rewardType as any,
           discountValue: discountValue || 0,
           menuItemId: menuItemId || null,
           pointsCost,
@@ -126,7 +126,7 @@ router.put(
         data: {
           name: parsed.data.name?.trim(),
           description: parsed.data.description,
-          rewardType: parsed.data.rewardType,
+          rewardType: parsed.data.rewardType as any,
           discountValue: parsed.data.discountValue,
           menuItemId: parsed.data.menuItemId,
           pointsCost: parsed.data.pointsCost,

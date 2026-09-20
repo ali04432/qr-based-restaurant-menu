@@ -411,7 +411,7 @@ router.get(
         }
       }
 
-      const result: DemandForecastResult = {
+      const result: any = {
         hasSufficientData: historicalOrders.length >= 5,
         confidenceScore: 0.88,
         predictedOrderVolumeTomorrow: next7DaysForecast[0]?.predictedOrders || 25,

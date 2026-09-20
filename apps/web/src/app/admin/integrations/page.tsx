@@ -440,7 +440,7 @@ export default function AdminIntegrationsPage() {
                       Rendered Payload / Receipt Preview
                     </label>
                     <pre className="p-3 rounded bg-slate-900 text-slate-100 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap max-h-56">
-                      {testResult.payloadPreview}
+                      {typeof testResult.payloadPreview === 'string' ? testResult.payloadPreview : JSON.stringify(testResult.payloadPreview, null, 2)}
                     </pre>
                   </div>
                 )}
@@ -451,7 +451,7 @@ export default function AdminIntegrationsPage() {
                       Raw Provider Response Metadata
                     </label>
                     <pre className="p-2 rounded bg-slate-100 text-slate-800 text-[10px] font-mono overflow-x-auto">
-                      {JSON.stringify(testResult.details, null, 2)}
+                      {typeof testResult.details === 'string' ? testResult.details : JSON.stringify(testResult.details, null, 2)}
                     </pre>
                   </div>
                 )}

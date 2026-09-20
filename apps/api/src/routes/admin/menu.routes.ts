@@ -234,7 +234,7 @@ router.patch(
             },
             update: {
               ...(parsed.data.stockCount !== undefined && { stockCount: parsed.data.stockCount ?? 0 }),
-              ...(parsed.data.lowStockThreshold !== undefined && { lowStockThreshold: parsed.data.lowStockThreshold }),
+              ...(parsed.data.lowStockThreshold !== undefined && { lowStockThreshold: parsed.data.lowStockThreshold ?? 10 }),
             },
           });
         }

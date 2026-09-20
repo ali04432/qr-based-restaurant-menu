@@ -81,7 +81,7 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-rose-300/80 mt-0.5 font-medium">
                 {overview.lowStockAlerts
                   .slice(0, 3)
-                  .map((i) => `${i.name} (${i.stockCount} left)`)
+                  .map((i) => `${i.name} (${i.stockCount ?? i.stock} left)`)
                   .join(', ')}
                 {overview.lowStockAlerts.length > 3 ? '...' : ''}
               </p>
@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="mt-2.5 flex items-baseline justify-between">
             <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Rs. {metrics?.averageOrderValue ? Math.round(metrics.averageOrderValue).toLocaleString() : '0'}
+              Rs. {metrics?.averageOrderValue ? Math.round(Number(metrics.averageOrderValue)).toLocaleString() : '0'}
             </span>
             <span className="text-xs font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
               AOV
@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
             {overview?.revenueTrend && overview.revenueTrend.length > 0 ? (
               overview.revenueTrend.map((bar, idx) => {
                 const maxVal = Math.max(
-                  ...overview.revenueTrend.map((b) => b.revenue),
+                  ...(overview.revenueTrend || []).map((b) => b.revenue),
                   1000
                 );
                 const heightPct = Math.max(12, Math.round((bar.revenue / maxVal) * 100));
