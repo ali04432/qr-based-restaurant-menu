@@ -16,15 +16,20 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
   const { tableNumber, restaurantId } = useTableContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
+      if (!restaurantId || !tableNumber) {
+        throw new Error('Restaurant or Table information missing. Please re-scan QR code.');
+      }
+
       const order = await orderService.submitOrder({
-        restaurantId: restaurantId || '1',
-        tableId: tableNumber ? `t-${tableNumber}` : 't-07',
+        restaurantId,
+        tableId: `t-${tableNumber}`,
         items: items.map(i => ({
           menuItemId: i.menuItem.id,
           name: i.menuItem.name,
@@ -37,8 +42,12 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
 
       setOrderId(order.id);
       clearCart();
-    } catch (error) {
-      console.error('Failed to submit order', error);
+    } catch (err: any) {
+      console.error('Failed to submit order', err);
+      const errorMessage = err?.response?.data?.error?.message
+        || err?.message
+        || 'Failed to submit order. Please try again.';
+      setError(errorMessage);
       setIsSubmitting(false);
     }
   };
@@ -65,6 +74,13 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
           <h2 className="text-2xl font-display font-bold text-[#F8FAFC]">Checkout</h2>
           <p className="text-xs text-[#A1A1AA] mt-1">Complete your order for {tableNumber ? `Table ${tableNumber}` : 'Takeaway'}</p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-start gap-2">
+            <span className="mt-0.5">⚠️</span>
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -95,7 +111,7 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 bg-[#F59E0B] hover:bg-[#F97316] disabled:opacity-50 text-[#0B0B0D] font-black text-xs rounded-xl 
+              className="w-full py-3.5 bg-[#F59E0B] hover:bg-[#F97316] disabled:opacity-50 text-[#0B0B0D] font-black text-xs rounded-xl
                          shadow-[0_4px_0_0_#9A470B,0_0_20px_rgba(245,158,11,0.3)] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
             >
               {isSubmitting ? (

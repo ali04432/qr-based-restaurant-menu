@@ -150,6 +150,10 @@ export default function CheckoutPage() {
             return 'Restaurant information is missing. Please re-scan the restaurant QR code.';
         }
 
+        if (!tableId) {
+            return 'Table information is missing. Please re-scan the table QR code before placing your order.';
+        }
+
         return null;
     };
 
@@ -164,13 +168,9 @@ export default function CheckoutPage() {
             }
 
             const request: CustomerOrderRequest = {
-                restaurantId: String(
-                    restaurantId || 'ffed1622-07e2-4b76-a0e7-5de417637740'
-                ),
+                restaurantId: String(restaurantId),
 
-                tableId: String(
-                    tableId || '8c1f492d-1f8e-48c2-8d24-0cd36985d67b'
-                ),
+                tableId: String(tableId),
 
                 customerPhone: customerInfo.phone ? customerInfo.phone.trim() : undefined,
 
@@ -283,15 +283,17 @@ export default function CheckoutPage() {
                     order.id
                 )}`
             );
-        } catch (submissionError) {
+        } catch (submissionError: any) {
             console.error(
                 '[Checkout] Order submission failed:',
                 submissionError
             );
 
-            setError(
-                'We could not place your order right now. Please check your connection and try again.'
-            );
+            const errorMessage = submissionError?.response?.data?.error?.message
+                || submissionError?.message
+                || 'We could not place your order right now. Please check your connection and try again.';
+
+            setError(errorMessage);
         } finally {
             setPlacingOrder(false);
         }

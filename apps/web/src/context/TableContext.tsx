@@ -82,10 +82,10 @@ export function TableProvider({ children }: { children: ReactNode }) {
       const storedTable = localStorage.getItem('qr_tableNumber');
       const storedName = localStorage.getItem('qr_restaurantName');
 
-      setRestaurantId(storedRestaurant || 'ffed1622-07e2-4b76-a0e7-5de417637740');
-      setTableId(storedTableId || '8c1f492d-1f8e-48c2-8d24-0cd36985d67b');
-      setTableNumber(storedTable || '1');
-      setRestaurantName(storedName || 'Silver Sapoon');
+      setRestaurantId(storedRestaurant);
+      setTableId(storedTableId);
+      setTableNumber(storedTable);
+      setRestaurantName(storedName);
       setIsLoading(false);
     } else {
       setIsLoading(false);

@@ -84,8 +84,8 @@
 - **TypeScript errors AFTER**: 0
 - **Build errors BEFORE**: Yes
 - **Build errors AFTER**: 0
-- **Runtime issues BEFORE**: AR button did not exist, Schema missing dimension fields.
-- **Runtime issues AFTER**: 0
+- **Runtime issues BEFORE**: AR button did not exist, Schema missing dimension fields. Customer orders failing silently due to hardcoded fallback UUIDs breaking Prisma transactions.
+- **Runtime issues AFTER**: 0. The Checkout and order validation pipeline strictly verifies `tableId` and surfaces actual API error messages to the customer, preventing silent transaction rollbacks.
 
 ## SECTION G — REMAINING ISSUES
 - **CRITICAL**: None.

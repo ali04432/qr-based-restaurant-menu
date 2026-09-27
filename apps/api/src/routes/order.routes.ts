@@ -48,6 +48,14 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const TAX_RATE = 0.08; // 8%
     const SERVICE_CHARGE = 5.0; // flat 5.00
 
+    // Validate table existence
+    const tableExists = await prisma.table.findUnique({
+      where: { id: tableId, restaurantId },
+    });
+    if (!tableExists) {
+      return next(new AppError('The selected table is invalid or does not belong to this restaurant.', 400, 'INVALID_TABLE'));
+    }
+
     // Fetch authoritative menu items from database
     const dbMenuItems = await prisma.menuItem.findMany({
       where: {
