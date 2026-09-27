@@ -402,6 +402,10 @@ router.get('/items/:id/ar-asset', async (req: Request, res: Response, next: Next
         previewImage: true,
         mimeType: true,
         scale: true,
+        widthCm: true,
+        heightCm: true,
+        depthCm: true,
+        portionLabel: true,
         status: true,
       },
     });

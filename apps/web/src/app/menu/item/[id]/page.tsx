@@ -176,6 +176,10 @@ export default function FoodDetailsPage() {
                   previewImage={arAsset.previewImage || item.image}
                   name={item.name}
                   scale={arAsset.scale}
+                  widthCm={arAsset.widthCm}
+                  heightCm={arAsset.heightCm}
+                  depthCm={arAsset.depthCm}
+                  portionLabel={arAsset.portionLabel}
                   onEvent={handleArEvent}
                 />
                 {/* Favorite button overlaid */}

@@ -14,6 +14,10 @@ export interface ArAssetData {
   previewImage?: string | null;
   mimeType: string;
   scale: number;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  depthCm?: number | null;
+  portionLabel?: string | null;
   status: string;
 }
 

@@ -83,7 +83,7 @@ router.post(
       const restaurantId = req.user!.restaurantId;
       if (!restaurantId) return next(new AppError('Restaurant ID required', 400, 'VALIDATION_ERROR'));
 
-      const { menuItemId, name, assetType, modelUrl, iosModelUrl, previewImage, mimeType, fileSize, scale, status, metadata } = req.body;
+      const { menuItemId, name, assetType, modelUrl, iosModelUrl, previewImage, mimeType, fileSize, scale, widthCm, heightCm, depthCm, portionLabel, status, metadata } = req.body;
 
       if (!name || !modelUrl) {
         return next(new AppError('name and modelUrl are required', 400, 'VALIDATION_ERROR'));
@@ -99,6 +99,10 @@ router.post(
         mimeType,
         fileSize,
         scale,
+        widthCm: widthCm !== undefined ? Number(widthCm) : undefined,
+        heightCm: heightCm !== undefined ? Number(heightCm) : undefined,
+        depthCm: depthCm !== undefined ? Number(depthCm) : undefined,
+        portionLabel,
         status,
         metadata,
       });

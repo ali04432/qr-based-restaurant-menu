@@ -863,6 +863,10 @@ model ArAsset {
   mimeType     String   @default("model/gltf-binary") @map("mime_type") @db.VarChar(100)
   fileSize     Int?     @map("file_size")
   scale        Float    @default(1.0)
+  widthCm      Float?   @map("width_cm")
+  heightCm     Float?   @map("height_cm")
+  depthCm      Float?   @map("depth_cm")
+  portionLabel String?  @map("portion_label") @db.VarChar(80)
   status       String   @default("ACTIVE") @db.VarChar(30) // ACTIVE | INACTIVE | DRAFT
   metadata     String?  @db.Text
   createdAt    DateTime @default(now()) @map("created_at")

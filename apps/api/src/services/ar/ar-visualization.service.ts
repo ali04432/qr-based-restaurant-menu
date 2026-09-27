@@ -18,6 +18,10 @@ export interface ArAssetPayload {
   mimeType?: string;
   fileSize?: number;
   scale?: number;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+  portionLabel?: string;
   status?: string;
   metadata?: string;
 }
@@ -78,6 +82,10 @@ export async function createArAsset(restaurantId: string, data: ArAssetPayload) 
       mimeType: data.mimeType ?? 'model/gltf-binary',
       fileSize: data.fileSize ?? null,
       scale: data.scale ?? 1.0,
+      widthCm: data.widthCm ?? null,
+      heightCm: data.heightCm ?? null,
+      depthCm: data.depthCm ?? null,
+      portionLabel: data.portionLabel ?? null,
       status: data.status ?? 'ACTIVE',
       metadata: data.metadata ?? null,
     },
@@ -112,6 +120,10 @@ export async function updateArAsset(
       ...(data.mimeType !== undefined && { mimeType: data.mimeType }),
       ...(data.fileSize !== undefined && { fileSize: data.fileSize }),
       ...(data.scale !== undefined && { scale: data.scale }),
+      ...(data.widthCm !== undefined && { widthCm: data.widthCm }),
+      ...(data.heightCm !== undefined && { heightCm: data.heightCm }),
+      ...(data.depthCm !== undefined && { depthCm: data.depthCm }),
+      ...(data.portionLabel !== undefined && { portionLabel: data.portionLabel }),
       ...(data.status !== undefined && { status: data.status }),
       ...(data.metadata !== undefined && { metadata: data.metadata }),
     },

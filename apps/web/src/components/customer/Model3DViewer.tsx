@@ -1,16 +1,20 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Box, Eye, RotateCcw, ZoomIn, ZoomOut, Smartphone, X } from 'lucide-react';
+import {
+  Box,
+  Eye,
+  Maximize2,
+  Camera,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 
 // ============================================================
-// Model3DViewer Component
-//
-// Progressive enhancement:
-//   1. Tries <model-viewer> (Google's web component) for full 3D + AR.
-//   2. Falls back to a preview image with "AR not supported" badge.
-//
-// Works without AR on desktop. Gracefully degrades on all platforms.
+// Model3DViewer — Production AR/3D Component
 // ============================================================
 
 interface Model3DViewerProps {
@@ -19,395 +23,237 @@ interface Model3DViewerProps {
   previewImage?: string | null;
   name: string;
   scale?: number;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  depthCm?: number | null;
+  portionLabel?: string | null;
   onEvent?: (eventType: string) => void;
   compact?: boolean;
 }
 
-// Detect AR support
-function detectArSupport(): { webxr: boolean; quicklook: boolean } {
-  if (typeof navigator === 'undefined') return { webxr: false, quicklook: false };
-  const webxr = 'xr' in navigator;
-  const quicklook = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  return { webxr, quicklook };
+function detectPlatform() {
+  if (typeof navigator === 'undefined') return { isIOS: false, isAndroid: false, isMobile: false };
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+  return { isIOS, isAndroid, isMobile: isIOS || isAndroid };
 }
 
+const ctrlBtn: React.CSSProperties = {
+  width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: 9, border: '1px solid rgba(255,255,255,0.15)',
+  background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(8px)',
+  color: '#fff', cursor: 'pointer',
+};
+
 export default function Model3DViewer({
-  modelUrl,
-  iosModelUrl,
-  previewImage,
-  name,
-  scale = 1,
-  onEvent,
-  compact = false,
+  modelUrl, iosModelUrl, previewImage, name, scale = 1,
+  widthCm, heightCm, depthCm, portionLabel, onEvent, compact = false,
 }: Model3DViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [modelViewerLoaded, setModelViewerLoaded] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [arSupport, setArSupport] = useState<{ webxr: boolean; quicklook: boolean }>({
-    webxr: false,
-    quicklook: false,
-  });
-  const [viewMode, setViewMode] = useState<'image' | '3d'>('image');
+  const modelViewerRef = useRef<HTMLElement & { canActivateAR?: boolean; activateAR?: () => void }>(null);
+  const [mvLoaded, setMvLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | '3d'>('preview');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showDims, setShowDims] = useState(false);
+  const [arAvailable, setArAvailable] = useState(false);
+  const [arStatus, setArStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
+  const [platform, setPlatform] = useState({ isIOS: false, isAndroid: false, isMobile: false });
 
-  // Load Google's model-viewer web component
+  const hasDims = widthCm || heightCm || depthCm;
+  const dimStr = [widthCm, heightCm, depthCm].filter(Boolean).map(Number).join(' × ');
+
   useEffect(() => {
+    setPlatform(detectPlatform());
     if (typeof window === 'undefined') return;
-    if (customElements.get('model-viewer')) {
-      setModelViewerLoaded(true);
-      return;
+    if (customElements.get('model-viewer')) { setMvLoaded(true); return; }
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
+    s.onload = () => setMvLoaded(true);
+    s.onerror = () => setLoadError(true);
+    document.head.appendChild(s);
+  }, []);
+
+  const checkAr = useCallback(() => {
+    const mv = modelViewerRef.current;
+    if (mv && typeof mv.canActivateAR !== 'undefined') {
+      const can = !!mv.canActivateAR;
+      setArAvailable(can);
+      setArStatus(can ? 'available' : 'unavailable');
     }
-
-    const script = document.createElement('script');
-    script.type = 'module';
-    script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
-    script.onload = () => setModelViewerLoaded(true);
-    script.onerror = () => setLoadError(true);
-    document.head.appendChild(script);
-
-    return () => {
-      // Don't remove — other instances may use it
-    };
   }, []);
 
   useEffect(() => {
-    setArSupport(detectArSupport());
-  }, []);
+    if (!mvLoaded) return;
+    checkAr();
+    const t = window.setTimeout(checkAr, 1400);
+    return () => clearTimeout(t);
+  }, [mvLoaded, viewMode, checkAr]);
 
-  const handleView3D = useCallback(() => {
-    setViewMode('3d');
-    onEvent?.('view3d.opened');
-  }, [onEvent]);
-
-  const handleOpenAr = useCallback(() => {
+  const handleLaunchAr = useCallback(() => {
     onEvent?.('ar.viewer.opened');
-    // model-viewer handles AR launch natively
-  }, [onEvent]);
+    if (platform.isIOS && iosModelUrl) {
+      const a = document.createElement('a');
+      a.setAttribute('rel', 'ar');
+      a.setAttribute('href', iosModelUrl);
+      a.click();
+      onEvent?.('ar.quicklook.launched');
+    } else if (modelViewerRef.current?.activateAR) {
+      modelViewerRef.current.activateAR();
+      onEvent?.('ar.session.started');
+    }
+  }, [platform, iosModelUrl, onEvent]);
 
-  const handleFullscreen = useCallback(() => {
-    setIsFullscreen((prev) => !prev);
-  }, []);
+  const handleModelLoad = useCallback(() => {
+    onEvent?.('ar.model.loaded');
+    checkAr();
+  }, [onEvent, checkAr]);
 
-  const hasAr = arSupport.webxr || arSupport.quicklook;
+  const arButtonShown = arAvailable || (platform.isIOS && !!iosModelUrl);
 
-  // ── Fullscreen overlay ──────────────────────────────────────
+  const DimBadge = () => !hasDims ? null : (
+    <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 10, padding: '6px 10px', color: '#d4af37', fontSize: 10, fontWeight: 700, lineHeight: 1.6, zIndex: 10 }}>
+      <div style={{ color: 'rgba(212,175,55,0.7)', fontSize: 9, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Approx. Dish Size</div>
+      {dimStr} cm
+      {portionLabel && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, marginTop: 2 }}>{portionLabel}</div>}
+    </div>
+  );
+
+  const ModelViewerEl = ({ fullH = false }: { fullH?: boolean }) => {
+    const style: React.CSSProperties = { width: '100%', height: fullH ? '100%' : undefined, aspectRatio: fullH ? undefined : '4/3', minHeight: fullH ? undefined : 280, backgroundColor: '#080810', display: 'block' };
+    return mvLoaded && !loadError ? (
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error custom web component
+      <model-viewer
+        ref={modelViewerRef}
+        src={modelUrl}
+        ios-src={iosModelUrl || undefined}
+        alt={`3D model of ${name}`}
+        camera-controls auto-rotate ar
+        ar-modes="webxr scene-viewer quick-look"
+        shadow-intensity="1" shadow-softness="0.8"
+        exposure="0.9" tone-mapping="commerce"
+        style={style}
+        scale={`${scale} ${scale} ${scale}`}
+        onLoad={handleModelLoad}
+      />
+    ) : loadError ? (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: '#64748b', fontSize: 13 }}>
+        <Box size={38} color="rgba(100,116,139,0.5)" />
+        <span>3D viewer unavailable</span>
+      </div>
+    ) : (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10 }}>
+        <div style={{ width: 26, height: 26, border: '3px solid #d4af37', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ color: '#64748b', fontSize: 12 }}>Loading 3D model…</span>
+      </div>
+    );
+  };
+
+  if (compact) {
+    return (
+      <button onClick={() => { setViewMode('3d'); onEvent?.('view3d.opened'); }} aria-label={`View ${name} in 3D`}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--accent-gold)] transition hover:bg-[var(--accent-gold)]/20"
+      ><Box size={12} />3D View</button>
+    );
+  }
+
   if (isFullscreen) {
     return (
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 9999,
-          backgroundColor: 'rgba(0,0,0,0.95)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '16px 20px',
-          }}
-        >
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{name}</span>
-          <button
-            onClick={handleFullscreen}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 10,
-              padding: '8px',
-              color: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            <X size={18} />
-          </button>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{name}</span>
+            {hasDims && <span style={{ color: '#d4af37', fontSize: 10, marginLeft: 10, opacity: 0.8 }}>{dimStr} cm</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {arButtonShown && (
+              <button onClick={handleLaunchAr} aria-label="View in AR" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.12)', color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Camera size={14} />View in Your Space
+              </button>
+            )}
+            <button onClick={() => setIsFullscreen(false)} aria-label="Close fullscreen" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: 8, color: '#fff', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
+          </div>
         </div>
         <div style={{ flex: 1, position: 'relative' }}>
-          {modelViewerLoaded && (
-            // @ts-ignore - model-viewer is a web component
-            <model-viewer
-              src={modelUrl}
-              ios-src={iosModelUrl || undefined}
-              alt={name}
-              camera-controls
-              auto-rotate
-              ar={hasAr ? '' : undefined}
-              ar-modes="webxr scene-viewer quick-look"
-              shadow-intensity="1"
-              exposure="0.8"
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'transparent',
-              }}
-              scale={`${scale} ${scale} ${scale}`}
-            />
-          )}
+          <ModelViewerEl fullH />
+          {hasDims && <DimBadge />}
         </div>
       </div>
     );
   }
 
-  // ── Compact pill button (for FoodCard) ──────────────────────
-  if (compact) {
-    return (
-      <button
-        onClick={handleView3D}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--accent-gold)] transition hover:bg-[var(--accent-gold)]/20"
-        title="View in 3D"
-      >
-        <Box size={12} />
-        3D View
-      </button>
-    );
-  }
-
-  // ── Main 3D viewer panel ────────────────────────────────────
   return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'relative',
-        borderRadius: 20,
-        overflow: 'hidden',
-        border: '1px solid var(--border-color)',
-        backgroundColor: 'var(--bg-card)',
-      }}
-    >
-      {/* Image mode — show preview with 3D button */}
-      {viewMode === 'image' && (
+    <div style={{ position: 'relative', borderRadius: 20, overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+      {/* PREVIEW MODE */}
+      {viewMode === 'preview' && (
         <div style={{ position: 'relative', aspectRatio: '4/3', minHeight: 280 }}>
-          {previewImage ? (
-            <img
-              src={previewImage}
-              alt={name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-              }}
-            >
-              <Box size={48} color="var(--accent-gold)" />
+          {previewImage
+            ? <img src={previewImage} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#0d0d1a,#141428)' }}><Box size={52} color="rgba(212,175,55,0.35)" /></div>
+          }
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.65) 0%,transparent 50%)', pointerEvents: 'none' }} />
+          <button onClick={() => { setViewMode('3d'); onEvent?.('view3d.opened'); }} aria-label={`View ${name} in 3D`}
+            style={{ position: 'absolute', bottom: 14, right: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 12, border: '1px solid rgba(212,175,55,0.35)', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(12px)', color: '#d4af37', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <Box size={14} />View in 3D
+          </button>
+          {hasDims && <DimBadge />}
+        </div>
+      )}
+
+      {/* 3D MODE */}
+      {viewMode === '3d' && (
+        <div>
+          <div style={{ position: 'relative', background: '#080810' }}>
+            <ModelViewerEl />
+
+            {/* Top-right controls */}
+            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6, zIndex: 10 }}>
+              <button onClick={() => setViewMode('preview')} title="Back to image" aria-label="Back to image" style={ctrlBtn}><Eye size={15} /></button>
+              <button onClick={() => setIsFullscreen(true)} title="Fullscreen" aria-label="Fullscreen" style={ctrlBtn}><Maximize2 size={15} /></button>
+              {hasDims && (
+                <button onClick={() => setShowDims(v => !v)} title="Dish size info" aria-label="Dish size info" style={{ ...ctrlBtn, color: showDims ? '#d4af37' : '#fff', borderColor: showDims ? 'rgba(212,175,55,0.4)' : 'rgba(255,255,255,0.15)' }}><Info size={15} /></button>
+              )}
             </div>
-          )}
 
-          {/* 3D Badge / Button */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
-              display: 'flex',
-              gap: 8,
-            }}
-          >
-            <button
-              onClick={handleView3D}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '10px 16px',
-                borderRadius: 12,
-                border: '1px solid rgba(212, 175, 55, 0.3)',
-                background: 'rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(12px)',
-                color: '#d4af37',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              <Box size={14} />
-              View in 3D
-            </button>
+            {/* Dimension info panel */}
+            {showDims && hasDims && (
+              <div style={{ position: 'absolute', top: 10, left: 10, right: 56, background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(12px)', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 12, padding: '10px 14px', zIndex: 10 }}>
+                <div style={{ color: '#d4af37', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Approximate Dish Size</div>
+                <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{dimStr} cm</div>
+                {portionLabel && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 3 }}>{portionLabel}</div>}
+                <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, marginTop: 6, lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <RotateCcw size={8} /> Drag to rotate • Pinch to zoom
+                </div>
+              </div>
+            )}
 
-            {hasAr && (
-              <button
-                onClick={handleOpenAr}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '10px 16px',
-                  borderRadius: 12,
-                  border: '1px solid rgba(16, 185, 129, 0.3)',
-                  background: 'rgba(0,0,0,0.7)',
-                  backdropFilter: 'blur(12px)',
-                  color: '#10b981',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                }}
-              >
-                <Smartphone size={14} />
-                View in AR
+            {/* AR button — only when actually available */}
+            {arButtonShown && (
+              <button onClick={handleLaunchAr} aria-label="View this dish in your space using AR"
+                style={{ position: 'absolute', bottom: 12, right: 12, display: 'flex', alignItems: 'center', gap: 7, padding: '11px 18px', borderRadius: 13, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(12px)', color: '#10b981', fontSize: 12, fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em', boxShadow: '0 4px 20px rgba(16,185,129,0.15)', zIndex: 10 }}>
+                <Camera size={15} />View in Your Space
               </button>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* 3D Mode — show model-viewer */}
-      {viewMode === '3d' && (
-        <div style={{ position: 'relative', aspectRatio: '4/3', minHeight: 280 }}>
-          {modelViewerLoaded && !loadError ? (
-            // @ts-ignore - model-viewer is a web component
-            <model-viewer
-              src={modelUrl}
-              ios-src={iosModelUrl || undefined}
-              alt={name}
-              camera-controls
-              auto-rotate
-              ar={hasAr ? '' : undefined}
-              ar-modes="webxr scene-viewer quick-look"
-              shadow-intensity="1"
-              exposure="0.8"
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: '#0a0a0f',
-              }}
-              scale={`${scale} ${scale} ${scale}`}
-            />
-          ) : loadError ? (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                gap: 12,
-                background: '#0a0a0f',
-                color: 'var(--text-secondary)',
-                fontSize: 13,
-              }}
-            >
-              <Box size={36} color="var(--text-muted)" />
-              <span>3D viewer unavailable</span>
-            </div>
-          ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#0a0a0f',
-              }}
-            >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  border: '3px solid var(--accent-gold)',
-                  borderTopColor: 'transparent',
-                  borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
-                }}
-              />
+            {hasDims && !showDims && <DimBadge />}
+          </div>
+
+          {/* AR capability note */}
+          {arStatus === 'available' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 11, color: '#10b981', background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '0 0 20px 20px' }}>
+              <CheckCircle2 size={13} />AR ready — tap "View in Your Space" to place this dish on your real table
             </div>
           )}
-
-          {/* Controls */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              display: 'flex',
-              gap: 6,
-            }}
-          >
-            <button
-              onClick={() => setViewMode('image')}
-              title="Back to image"
-              style={{
-                width: 36,
-                height: 36,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 10,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              <Eye size={16} />
-            </button>
-            <button
-              onClick={handleFullscreen}
-              title="Fullscreen"
-              style={{
-                width: 36,
-                height: 36,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 10,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(8px)',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              <ZoomIn size={16} />
-            </button>
-          </div>
-
-          {/* AR launch button */}
-          {hasAr && (
-            <button
-              onClick={handleOpenAr}
-              style={{
-                position: 'absolute',
-                bottom: 12,
-                right: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '10px 16px',
-                borderRadius: 12,
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                background: 'rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(12px)',
-                color: '#10b981',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              <Smartphone size={14} />
-              Launch AR
-            </button>
+          {arStatus === 'unavailable' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 11, color: '#94a3b8', background: 'rgba(148,163,184,0.05)', border: '1px solid rgba(148,163,184,0.1)', borderRadius: '0 0 20px 20px' }}>
+              <AlertTriangle size={13} />AR not supported on this device — you can still view the dish in 3D above
+            </div>
           )}
         </div>
       )}
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
