@@ -21,6 +21,7 @@ import {
   Bot,
   Bell,
   Gift,
+  Calendar,
   Plug,
   Settings,
   Store,
@@ -150,6 +151,12 @@ const NAV_ITEMS: NavItem[] = [
     name: 'AR / 3D Assets',
     href: '/admin/ar',
     icon: Box,
+    allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
+  },
+  {
+    name: 'Events',
+    href: '/admin/events',
+    icon: Calendar,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
   },
   {

@@ -300,3 +300,32 @@ export interface AdminNotification {
   isRead: boolean;
   createdAt: string;
 }
+
+// ============================================================
+// Event Management (Phase 6)
+// ============================================================
+
+export interface Event {
+  id: string;
+  restaurantId: string;
+  branchId?: string | null;
+  name: string;
+  description?: string | null;
+  eventType: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateEventInput {
+  restaurantId?: string;
+  branchId?: string | null;
+  name: string;
+  description?: string | null;
+  eventType: string;
+  startDate: string;
+  endDate: string;
+  isActive?: boolean;
+}

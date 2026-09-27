@@ -636,7 +636,7 @@ export default function AdminArPage() {
                               {evt.sessionId || 'anonymous'}
                             </td>
                             <td className="py-2.5 px-3 text-slate-400">
-                              {new Date(evt.createdAt || evt.timestamp || Date.now()).toLocaleString()}
+                              {new Date(evt.createdAt || Date.now()).toLocaleString()}
                             </td>
                           </tr>
                         ))}

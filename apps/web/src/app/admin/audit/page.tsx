@@ -555,7 +555,7 @@ export default function AdminAuditPage() {
                 <div className="bg-zinc-800/40 p-3 rounded-xl border border-zinc-800">
                   <span className="text-zinc-500 block mb-1">Details & Payload:</span>
                   <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 font-mono text-zinc-300 whitespace-pre-wrap">
-                    {log.details ? String(log.details) : 'No additional payload provided.'}
+                    {selectedLog.details ? String(selectedLog.details) : 'No additional payload provided.'}
                   </div>
                 </div>
               </div>

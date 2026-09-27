@@ -54,43 +54,7 @@ const TYPE_CONFIG: Record<
     bg: 'bg-slate-100',
     text: 'text-slate-600',
     border: 'border-slate-200',
-  },
-  ORDER_PLACED: {
-    icon: ShoppingBag,
-    bg: 'bg-blue-50',
-    text: 'text-blue-600',
-    border: 'border-blue-200',
-  },
-  ORDER_STATUS_CHANGED: {
-    icon: ShoppingBag,
-    bg: 'bg-blue-50',
-    text: 'text-blue-600',
-    border: 'border-blue-200',
-  },
-  LOW_STOCK: {
-    icon: Package,
-    bg: 'bg-amber-50',
-    text: 'text-amber-600',
-    border: 'border-amber-200',
-  },
-  PAYMENT_RECEIVED: {
-    icon: CreditCard,
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-600',
-    border: 'border-emerald-200',
-  },
-  NEW_FEEDBACK: {
-    icon: MessageSquare,
-    bg: 'bg-violet-50',
-    text: 'text-violet-600',
-    border: 'border-violet-200',
-  },
-  ALERT: {
-    icon: AlertCircle,
-    bg: 'bg-rose-50',
-    text: 'text-rose-600',
-    border: 'border-rose-200',
-  },
+  }
 };
 
 const TYPE_FILTERS: { value: NotificationType | 'ALL'; label: string }[] = [

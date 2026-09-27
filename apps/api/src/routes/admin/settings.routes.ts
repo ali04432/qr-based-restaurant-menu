@@ -129,7 +129,7 @@ router.patch(
 
       if (parsed.data.currency) currentRuntime.currency = parsed.data.currency;
       if (parsed.data.taxRate !== undefined) currentRuntime.taxRate = parsed.data.taxRate;
-      if (parsed.data.serviceChargeRate !== undefined) currentRuntime.serviceCharge = parsed.data.serviceChargeRate;
+      if (parsed.data.serviceCharge !== undefined) currentRuntime.serviceCharge = parsed.data.serviceCharge;
       if (parsed.data.isOpen !== undefined) currentRuntime.isOpen = parsed.data.isOpen;
       if (parsed.data.openingHours !== undefined && parsed.data.openingHours !== null) currentRuntime.openingHours = parsed.data.openingHours;
 

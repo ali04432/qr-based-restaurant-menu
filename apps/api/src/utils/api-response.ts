@@ -30,6 +30,13 @@ export function sendCreated<T>(res: Response, data: T, message?: string): Respon
 }
 
 /**
+ * Send a 204 No Content response.
+ */
+export function sendNoContent(res: Response): Response {
+  return res.status(204).send();
+}
+
+/**
  * Send an error response.
  */
 export function sendError(

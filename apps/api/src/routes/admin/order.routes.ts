@@ -162,6 +162,10 @@ router.get(
           },
           table: true,
           payments: true,
+          orderEvents: {
+            orderBy: { createdAt: 'desc' },
+            include: { user: { select: { name: true, role: true } } }
+          }
         },
       });
 
@@ -228,6 +232,7 @@ router.get(
         customerNote: order.customerNote,
         items: itemsWithCost,
         payments: order.payments,
+        orderEvents: order.orderEvents,
         auditLogs: staffLogs.map((l) => ({
           id: l.id,
           staffName: l.user?.name || 'Staff',
@@ -380,6 +385,19 @@ router.patch(
         );
       }
 
+      // Record Order Event
+      await prisma.orderEvent.create({
+        data: {
+          restaurantId: existingOrder.restaurantId,
+          orderId: existingOrder.id,
+          userId: req.user?.id || null,
+          statusFrom: existingOrder.status,
+          statusTo: status,
+          eventType: 'STATUS_CHANGED',
+          metadata: JSON.stringify({ actorRole: req.user?.role || 'SYSTEM' })
+        }
+      });
+
       // Real-time broadcast
       try {
         emitToRestaurant(existingOrder.restaurantId, SOCKET_EVENTS.ORDER_STATUS_CHANGED, updatedOrder);
@@ -449,6 +467,19 @@ router.patch(
             },
           });
         }
+
+        // Record Order Event
+        await tx.orderEvent.create({
+          data: {
+            restaurantId: order.restaurantId,
+            orderId: order.id,
+            userId: req.user?.id || null,
+            statusFrom: order.status,
+            statusTo: 'CANCELLED',
+            eventType: 'ORDER_CANCELLED',
+            metadata: JSON.stringify({ reason: reason || 'Admin cancelled' })
+          }
+        });
 
         return cancelled;
       });

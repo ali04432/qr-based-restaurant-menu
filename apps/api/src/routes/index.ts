@@ -4,6 +4,7 @@ import authRouter from './auth.routes';
 import menuRouter from './menu.routes';
 import orderRouter from './order.routes';
 import loyaltyRouter from './loyalty.routes';
+import aiRouter from './ai.routes';
 
 // Admin Routers (Phase 3 & Phase 4)
 import adminDashboardRouter from './admin/dashboard.routes';
@@ -34,6 +35,7 @@ import superAdminRouter from './admin/super-admin.routes';
 import adminAuditRouter from './admin/audit.routes';
 import adminCustomerRouter from './admin/customer.routes';
 import adminArRouter from './admin/ar.routes';
+import adminEventRouter from './admin/event.routes';
 import waiterRouter from './waiter.routes';
 import cashierRouter from './cashier.routes';
 
@@ -55,6 +57,7 @@ router.use('/orders', orderRouter);        // POST /api/orders, GET /api/orders/
 router.use('/feedback', adminFeedbackRouter); // POST /api/feedback (customer feedback)
 router.use('/promotions', adminPromotionRouter); // POST /api/promotions/validate (customer discount validation)
 router.use('/loyalty', loyaltyRouter);     // GET /api/loyalty/account, POST /register, GET /rewards, POST /redeem
+router.use('/ai', aiRouter);               // POST /api/ai/chat (customer AI chat)
 
 // ── Admin Operating System routes
 router.use('/admin/dashboard', adminDashboardRouter);
@@ -85,6 +88,7 @@ router.use('/super-admin', superAdminRouter);                      // REQ-18: Pl
 router.use('/admin/audit', adminAuditRouter);                      // REQ-21: Enterprise Security & Audit Log
 router.use('/admin/customers', adminCustomerRouter);              // Customer Directory & Order History
 router.use('/admin/ar', adminArRouter);                           // Phase 4: AR Asset Management & Telemetry
+router.use('/admin/events', adminEventRouter);                    // Phase 6: Event Management
 
 // ── Phase 5: Waiter & Cashier POS System routes
 router.use('/waiter', waiterRouter);

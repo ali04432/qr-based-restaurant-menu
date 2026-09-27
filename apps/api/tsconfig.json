@@ -16,12 +16,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": "./src",
-    "paths": {
-      "@qr-menu/shared": [
-        "../../../packages/shared/src"
-      ]
-    }
+    "baseUrl": "./src"
   },
   "include": [
     "src/**/*"

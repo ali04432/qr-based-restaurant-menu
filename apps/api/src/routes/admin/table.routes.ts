@@ -154,7 +154,7 @@ router.patch(
         return next(new AppError('Unauthorized', 403, 'FORBIDDEN'));
       }
 
-      const { restaurantId: _, ...updateData } = parsed.data;
+      const updateData = parsed.data;
       const updated = await prisma.table.update({
         where: { id },
         data: updateData as any,

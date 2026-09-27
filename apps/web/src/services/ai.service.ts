@@ -506,34 +506,39 @@ function buildAssistantReply(
 export const aiService = {
   async getRecommendations(
     restaurantId: string,
-    tableNumber: string
+    tableNumber: string,
+    cartItemIds: string[] = []
   ): Promise<MenuItem[]> {
-    await new Promise((resolve) =>
-      setTimeout(resolve, 300)
+    const API_BASE =
+      typeof window === 'undefined'
+        ? (process.env.API_BASE_URL ?? 'http://localhost:4000')
+        : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000');
+
+    try {
+      const q = new URLSearchParams({ restaurantId });
+      if (cartItemIds.length > 0) q.append('cartItemIds', cartItemIds.join(','));
+
+      const res = await fetch(`${API_BASE}/api/ai/recommendations?${q.toString()}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          return data.data;
+        }
+      }
+    } catch (err) {
+      console.warn('[aiService] Backend recommendations failed, fallback to local', err);
+    }
+
+    // Fallback logic
+    const items = getRestaurantItems(restaurantId).filter(isAvailable);
+    const preferred = items.filter((item) =>
+      getBadgeMatches(item, ['best match', 'popular', 'chef', 'best seller'])
     );
-
-    void tableNumber;
-
-    const items =
-      getRestaurantItems(
-        restaurantId
-      ).filter(isAvailable);
-
-    const preferred =
-      items.filter((item) =>
-        getBadgeMatches(item, [
-          'best match',
-          'popular',
-          'chef',
-          'best seller',
-        ])
-      );
-
-    return (
-      preferred.length > 0
-        ? preferred
-        : sortByRating(items)
-    ).slice(0, 4);
+    return (preferred.length > 0 ? preferred : sortByRating(items)).slice(0, 4);
   },
 
   async getUpsellSuggestions(

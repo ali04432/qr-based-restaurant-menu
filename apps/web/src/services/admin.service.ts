@@ -42,6 +42,8 @@ import {
   CreateArAssetInput,
   UpdateArAssetInput,
   VisualizationEvent,
+  Event,
+  CreateEventInput
 } from '@qr-menu/shared';
 import { apiClient } from '../lib/api-client';
 
@@ -692,6 +694,22 @@ export const adminService = {
   }> {
     return apiClient.get(`/api/admin/ar/analytics?days=${days}`, { token: token || undefined });
   },
-};
 
+  // ── Event Management (Phase 6)
+  async getEvents(restaurantId: string, token: string): Promise<Event[]> {
+    return apiClient.get(`/api/admin/events?restaurantId=${restaurantId}`, { token });
+  },
+
+  async createEvent(input: CreateEventInput, token: string): Promise<Event> {
+    return apiClient.post('/api/admin/events', input, { token });
+  },
+
+  async updateEvent(id: string, input: Partial<CreateEventInput>, token: string): Promise<Event> {
+    return apiClient.put(`/api/admin/events/${id}`, input, { token });
+  },
+
+  async deleteEvent(id: string, token: string): Promise<void> {
+    return apiClient.delete(`/api/admin/events/${id}`, { token });
+  },
+};
 

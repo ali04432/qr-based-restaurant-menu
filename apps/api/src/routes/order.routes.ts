@@ -104,7 +104,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         costPriceAtOrder,
         quantity: reqItem.quantity,
         subtotal: itemSubtotal,
-        specialInstructions: (reqItem as any).specialInstructions ?? reqItem.notes ?? null,
+        specialInstructions: reqItem.specialInstructions ?? null,
       };
     });
 

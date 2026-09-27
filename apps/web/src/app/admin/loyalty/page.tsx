@@ -171,9 +171,9 @@ export default function AdminLoyaltyPage() {
 
   const handleOpenEditReward = (r: Reward) => {
     setEditingReward(r);
-    setRewardName(r.name || r.title || '');
+    setRewardName(r.name || '');
     setRewardDescription(r.description || '');
-    setRewardType((r.rewardType as RewardType) || r.type || 'DISCOUNT_PERCENT');
+    setRewardType((r.rewardType as RewardType) || 'DISCOUNT_PERCENT');
     setRewardValue(r.discountValue);
     setRewardMenuItemId(r.menuItemId || '');
     setRewardPointsCost(r.pointsCost);
@@ -550,7 +550,7 @@ export default function AdminLoyaltyPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteReward(r.id, r.name || r.title || '')}
+                                  onClick={() => handleDeleteReward(r.id, r.name || '')}
                                   className="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 border border-rose-200 transition"
                                   title="Delete Reward"
                                 >

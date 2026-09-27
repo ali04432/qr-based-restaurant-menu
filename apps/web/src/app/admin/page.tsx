@@ -81,7 +81,7 @@ export default function AdminDashboardPage() {
               <p className="text-xs text-rose-300/80 mt-0.5 font-medium">
                 {overview.lowStockAlerts
                   .slice(0, 3)
-                  .map((i) => `${i.name} (${i.stockCount ?? i.stock} left)`)
+                  .map((i) => `${i.name} (${i.stockCount} left)`)
                   .join(', ')}
                 {overview.lowStockAlerts.length > 3 ? '...' : ''}
               </p>
