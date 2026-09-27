@@ -22,11 +22,14 @@ interface Model3DViewerProps {
   iosModelUrl?: string | null;
   previewImage?: string | null;
   name: string;
+  /** Calibration scale factor — admin-set to match real-world physical size. Default 1.0. */
   scale?: number;
   widthCm?: number | null;
   heightCm?: number | null;
   depthCm?: number | null;
   portionLabel?: string | null;
+  /** When true: AR launches with fixed real-world scale (no customer resizing). Default true. */
+  fixedArScale?: boolean;
   onEvent?: (eventType: string) => void;
   compact?: boolean;
 }
@@ -48,7 +51,7 @@ const ctrlBtn: React.CSSProperties = {
 
 export default function Model3DViewer({
   modelUrl, iosModelUrl, previewImage, name, scale = 1,
-  widthCm, heightCm, depthCm, portionLabel, onEvent, compact = false,
+  widthCm, heightCm, depthCm, portionLabel, fixedArScale = true, onEvent, compact = false,
 }: Model3DViewerProps) {
   const modelViewerRef = useRef<HTMLElement & { canActivateAR?: boolean; activateAR?: () => void }>(null);
   const [mvLoaded, setMvLoaded] = useState(false);
@@ -132,6 +135,8 @@ export default function Model3DViewer({
         alt={`3D model of ${name}`}
         camera-controls auto-rotate ar
         ar-modes="webxr scene-viewer quick-look"
+        ar-scale={fixedArScale ? 'fixed' : 'auto'}
+        xr-environment
         shadow-intensity="1" shadow-softness="0.8"
         exposure="0.9" tone-mapping="commerce"
         style={style}

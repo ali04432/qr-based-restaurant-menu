@@ -66,16 +66,16 @@
 | Quick Look | ❌ | ✅ Supported | ❌ | IMPLEMENTED |
 | 3D viewer | ✅ | ✅ | ✅ | IMPLEMENTED |
 | Surface placement| ✅ | ✅ | ❌ | IMPLEMENTED |
-| Physical scale | ✅ (via schema)| ✅ | ✅ (UI info) | IMPLEMENTED |
+| Physical scale | ✅ (via schema)| ✅ | ✅ (UI info) | IMPLEMENTED (ar-scale=fixed) |
 | Menu integration| ✅ | ✅ | ✅ | IMPLEMENTED |
-| Admin asset mgt | ✅ | ✅ | ✅ | IMPLEMENTED |
+| Admin asset mgt | ✅ | ✅ | ✅ | IMPLEMENTED (with dimensions) |
 
 ## SECTION E — 3D ASSET STATUS
 - **total AR-capable menu items**: Database schema fully supports linking.
 - **total GLB assets**: 1 (Avocado generic sample downloaded for test)
 - **total USDZ assets**: 0 (Require macOS/iOS ecosystem to compile realistically)
 - **total production assets**: 0 (Pending real restaurant food scanning)
-- **total test/demo assets**: 1
+- **total test/demo assets**: 1 (Avocado asset marked as TEST)
 - **missing assets**: Remainder of the menu.
 - **items needing final production 3D models**: All active restaurant items require actual photogrammetry/3D scanning.
 

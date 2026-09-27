@@ -346,7 +346,10 @@ export interface SystemHealthStatus {
 // ============================================================
 
 export type ArAssetType = 'MODEL_3D' | 'AR_GLTF' | 'AR_USDZ';
+/** Asset readiness / lifecycle status */
 export type ArAssetStatus = 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+/** Asset production-readiness classification (stored in metadata or a dedicated field) */
+export type ArAssetReadiness = 'DEMO' | 'TEST' | 'PRODUCTION' | 'READY';
 
 export interface ArAsset {
   id: string;
@@ -360,6 +363,14 @@ export interface ArAsset {
   mimeType: string;
   fileSize?: number | null;
   scale: number;
+  /** Real-world physical width of the dish/container in centimetres */
+  widthCm?: number | null;
+  /** Real-world physical height of the dish/container in centimetres */
+  heightCm?: number | null;
+  /** Real-world physical depth of the dish/container in centimetres */
+  depthCm?: number | null;
+  /** Human-readable portion description, e.g. "1 Plate" or "Half Portion" */
+  portionLabel?: string | null;
   status: ArAssetStatus;
   metadata?: string | null;
   createdAt: string;
@@ -385,6 +396,10 @@ export interface CreateArAssetInput {
   mimeType?: string;
   fileSize?: number;
   scale?: number;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+  portionLabel?: string;
   status?: ArAssetStatus;
   metadata?: string;
 }
@@ -398,6 +413,10 @@ export interface UpdateArAssetInput {
   mimeType?: string;
   fileSize?: number;
   scale?: number;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+  portionLabel?: string;
   status?: ArAssetStatus;
   metadata?: string;
 }

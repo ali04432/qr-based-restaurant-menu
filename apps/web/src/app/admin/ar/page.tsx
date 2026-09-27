@@ -62,6 +62,10 @@ export default function AdminArPage() {
   const [iosModelUrl, setIosModelUrl] = useState('');
   const [previewImage, setPreviewImage] = useState('');
   const [scale, setScale] = useState<number>(1.0);
+  const [widthCm, setWidthCm] = useState<string>('');
+  const [heightCm, setHeightCm] = useState<string>('');
+  const [depthCm, setDepthCm] = useState<string>('');
+  const [portionLabel, setPortionLabel] = useState('');
   const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'DRAFT'>('ACTIVE');
   const [metadata, setMetadata] = useState('');
   const [formError, setFormError] = useState('');
@@ -113,6 +117,10 @@ export default function AdminArPage() {
     setIosModelUrl('');
     setPreviewImage('');
     setScale(1.0);
+    setWidthCm('');
+    setHeightCm('');
+    setDepthCm('');
+    setPortionLabel('');
     setStatus('ACTIVE');
     setMetadata('');
     setFormError('');
@@ -123,12 +131,16 @@ export default function AdminArPage() {
     setEditingAsset(asset);
     setMenuItemId(asset.menuItemId || '');
     setName(asset.name);
-    setAssetType((asset.assetType as any) || 'MODEL_3D');
+    setAssetType((asset.assetType as 'MODEL_3D' | 'AR_GLTF' | 'AR_USDZ') || 'MODEL_3D');
     setModelUrl(asset.modelUrl || '');
     setIosModelUrl(asset.iosModelUrl || '');
     setPreviewImage(asset.previewImage || '');
     setScale(asset.scale || 1.0);
-    setStatus((asset.status as any) || 'ACTIVE');
+    setWidthCm(asset.widthCm != null ? String(asset.widthCm) : '');
+    setHeightCm(asset.heightCm != null ? String(asset.heightCm) : '');
+    setDepthCm(asset.depthCm != null ? String(asset.depthCm) : '');
+    setPortionLabel(asset.portionLabel || '');
+    setStatus((asset.status as 'ACTIVE' | 'INACTIVE' | 'DRAFT') || 'ACTIVE');
     setMetadata(asset.metadata || '');
     setFormError('');
     setModalOpen(true);
@@ -150,6 +162,13 @@ export default function AdminArPage() {
     try {
       setIsSubmitting(true);
 
+      const dimFields = {
+        widthCm: widthCm !== '' ? parseFloat(widthCm) : undefined,
+        heightCm: heightCm !== '' ? parseFloat(heightCm) : undefined,
+        depthCm: depthCm !== '' ? parseFloat(depthCm) : undefined,
+        portionLabel: portionLabel.trim() || undefined,
+      };
+
       if (editingAsset) {
         const payload: UpdateArAssetInput = {
           name: name.trim(),
@@ -158,6 +177,7 @@ export default function AdminArPage() {
           iosModelUrl: iosModelUrl.trim() || undefined,
           previewImage: previewImage.trim() || undefined,
           scale,
+          ...dimFields,
           status,
           metadata: metadata.trim() || undefined,
         };
@@ -171,6 +191,7 @@ export default function AdminArPage() {
           iosModelUrl: iosModelUrl.trim() || undefined,
           previewImage: previewImage.trim() || undefined,
           scale,
+          ...dimFields,
           status,
           metadata: metadata.trim() || undefined,
         };
@@ -179,8 +200,9 @@ export default function AdminArPage() {
 
       setModalOpen(false);
       await fetchData();
-    } catch (err: any) {
-      setFormError(err?.message || 'Failed to save AR asset');
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setFormError(e?.message || 'Failed to save AR asset');
     } finally {
       setIsSubmitting(false);
     }
@@ -798,6 +820,65 @@ export default function AdminArPage() {
                   />
                 </div>
 
+                {/* ── Real-World Physical Dimensions ── */}
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Info className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-semibold uppercase text-amber-400 tracking-wider">Real-World Dish Dimensions</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Enter the actual physical size of the dish or container. These values are shown to customers during 3D/AR viewing so they understand the real-world plate/bowl footprint.
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">Width (cm)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={widthCm}
+                        onChange={(e) => setWidthCm(e.target.value)}
+                        placeholder="e.g. 28"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">Height (cm)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={heightCm}
+                        onChange={(e) => setHeightCm(e.target.value)}
+                        placeholder="e.g. 8"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">Depth (cm)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={depthCm}
+                        onChange={(e) => setDepthCm(e.target.value)}
+                        placeholder="e.g. 28"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500 font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-1">Portion Label (Optional)</label>
+                    <input
+                      type="text"
+                      value={portionLabel}
+                      onChange={(e) => setPortionLabel(e.target.value)}
+                      placeholder="e.g. 1 Karahi · Serves 2–3 · Half Portion"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold uppercase text-slate-300 mb-1.5">
@@ -865,6 +946,10 @@ export default function AdminArPage() {
                   previewImage={previewAsset.previewImage}
                   name={previewAsset.name}
                   scale={previewAsset.scale}
+                  widthCm={previewAsset.widthCm}
+                  heightCm={previewAsset.heightCm}
+                  depthCm={previewAsset.depthCm}
+                  portionLabel={previewAsset.portionLabel}
                 />
               </div>
 
