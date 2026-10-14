@@ -265,7 +265,7 @@ export default function AdminDashboardPage() {
             </h2>
             <div className="space-y-2.5">
               <Link
-                href="/admin/kitchen"
+                href="/kds"
                 className="flex items-center justify-between p-2.5 rounded-lg border border-slate-800/80 bg-slate-950/50 hover:border-amber-500/40 hover:bg-slate-800/40 transition group"
               >
                 <div className="flex items-center gap-3">

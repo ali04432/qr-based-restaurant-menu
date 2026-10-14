@@ -123,6 +123,13 @@ export default function KitchenDisplayPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <a
+            href="/kds"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white transition shadow-xs"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span>Open Dedicated KDS</span>
+          </a>
           <button
             type="button"
             onClick={() => setSoundEnabled(!soundEnabled)}

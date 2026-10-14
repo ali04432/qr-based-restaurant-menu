@@ -1,14 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Store, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck, User } from 'lucide-react';
 import { useAuthContext } from '../../../context/AuthContext';
 import { UserRole } from '@qr-menu/shared';
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuthContext();
+
+  const redirectUrl = searchParams.get('redirect') || searchParams.get('returnUrl') || '/admin';
 
   const [email, setEmail] = useState('admin@restaurant.com');
   const [password, setPassword] = useState('admin123');
@@ -19,7 +22,7 @@ export default function AdminLoginPage() {
   const handleRoleQuickSelect = (role: UserRole, defaultEmail: string) => {
     setSelectedRole(role);
     setEmail(defaultEmail);
-    setPassword('password123');
+    setPassword(role === UserRole.ADMIN ? 'admin123' : 'password123');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,7 +32,7 @@ export default function AdminLoginPage() {
 
     try {
       await login({ email, password });
-      router.push('/admin');
+      router.push(redirectUrl);
     } catch (err: any) {
       // Show the actual error — do NOT create a fake session bypass
       const message =
@@ -59,6 +62,13 @@ export default function AdminLoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="bg-slate-950 border border-slate-800 py-8 px-6 sm:px-8 rounded-xl shadow-2xl">
+          {redirectUrl.startsWith('/kds') && (
+            <div className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Sign in required to access Kitchen Display System (Chef, Admin, Manager).</span>
+            </div>
+          )}
+
           {error && (
             <div className="mb-5 p-3 rounded-lg bg-rose-950/50 border border-rose-800/80 text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />

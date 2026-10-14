@@ -48,13 +48,22 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     const TAX_RATE = 0.08; // 8%
     const SERVICE_CHARGE = 5.0; // flat 5.00
 
-    // Validate table existence
-    const tableExists = await prisma.table.findUnique({
-      where: { id: tableId, restaurantId },
+    // Validate table existence (supports UUID, tableNumber, or qrToken)
+    const table = await prisma.table.findFirst({
+      where: {
+        restaurantId,
+        OR: [
+          { id: tableId },
+          { tableNumber: tableId },
+          { qrToken: tableId },
+          { tableNumber: tableId.replace(/^t-/, '') },
+        ],
+      },
     });
-    if (!tableExists) {
+    if (!table) {
       return next(new AppError('The selected table is invalid or does not belong to this restaurant.', 400, 'INVALID_TABLE'));
     }
+    const resolvedTableId = table.id;
 
     // Fetch authoritative menu items from database
     const dbMenuItems = await prisma.menuItem.findMany({
@@ -202,7 +211,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         data: {
           restaurantId,
           branchId: branchId || null,
-          tableId,
+          tableId: resolvedTableId,
           loyaltyAccountId: resolvedLoyaltyAccountId,
           rewardRedemptionId: appliedRewardRedemptionId,
           orderNumber,
@@ -271,10 +280,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
       // Mark table status as OCCUPIED
       await tx.table.update({
-        where: { id: tableId },
+        where: { id: resolvedTableId },
         data: { status: 'OCCUPIED' },
       }).catch(() => {
-        // Table ID might be custom string or UUID
+        // Safe catch
       });
 
       return order;
@@ -283,7 +292,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     // Attach tableNumber for KDS display
     const enrichedOrder: any = {
       ...finalOrder,
-      tableNumber: finalOrder.table?.tableNumber || tableId.replace(/^t-/, '') || '01',
+      tableNumber: table.tableNumber || finalOrder.table?.tableNumber || '01',
     };
 
     // Emit real-time WebSocket event to kitchen and staff

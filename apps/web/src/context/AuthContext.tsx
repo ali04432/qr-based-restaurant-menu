@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Dev bypass: restore mock sessions without hitting the API
     if (storedToken === 'mock-chef-token') {
-      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
+      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || '1';
       const mockChef: SafeUser = {
         id: 'chef-dev-001',
         restaurantId: storedRestaurantId,
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (storedToken === 'mock-waiter-token') {
-      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
+      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || '1';
       const mockWaiter: SafeUser = {
         id: 'waiter-dev-001',
         restaurantId: storedRestaurantId,
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (storedToken === 'mock-cashier-token') {
-      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || 'restaurant-123';
+      const storedRestaurantId = localStorage.getItem('qr_mock_restaurant_id') || '1';
       const mockCashier: SafeUser = {
         id: 'cashier-dev-001',
         restaurantId: storedRestaurantId,

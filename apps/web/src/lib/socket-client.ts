@@ -64,6 +64,13 @@ class SocketClient {
   offKitchenOrderUpdated(cb: (order: Order) => void) {
     this.getSocket().off(SOCKET_EVENTS.KITCHEN_ORDER_UPDATED, cb);
   }
+
+  onOrderStatusChanged(cb: (order: Order) => void) {
+    this.getSocket().on(SOCKET_EVENTS.ORDER_STATUS_CHANGED, cb);
+  }
+  offOrderStatusChanged(cb: (order: Order) => void) {
+    this.getSocket().off(SOCKET_EVENTS.ORDER_STATUS_CHANGED, cb);
+  }
 }
 
 export const socketClient = new SocketClient();

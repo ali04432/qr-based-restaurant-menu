@@ -13,7 +13,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ onClose }: CheckoutModalProps) {
   const { items, total, clearCart, closeDrawer } = useCartContext();
-  const { tableNumber, restaurantId } = useTableContext();
+  const { tableNumber, tableId, restaurantId } = useTableContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +23,15 @@ export function CheckoutModal({ onClose }: CheckoutModalProps) {
     setIsSubmitting(true);
 
     try {
-      if (!restaurantId || !tableNumber) {
-        throw new Error('Restaurant or Table information missing. Please re-scan QR code.');
+      if (!restaurantId || (!tableNumber && !tableId)) {
+        throw new Error('Restaurant or Table information missing. Please re-scan your table QR code.');
       }
+
+      const effectiveTableId = tableId || tableNumber!;
 
       const order = await orderService.submitOrder({
         restaurantId,
-        tableId: `t-${tableNumber}`,
+        tableId: effectiveTableId,
         items: items.map(i => ({
           menuItemId: i.menuItem.id,
           name: i.menuItem.name,

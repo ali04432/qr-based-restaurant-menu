@@ -122,24 +122,38 @@ export const adminService = {
   },
 
   // ── Table Management
-  async getTables(restaurantId: string, token: string): Promise<Table[]> {
-    return apiClient.get<Table[]>(`/api/admin/tables?restaurantId=${restaurantId}`, { token });
+  async getTables(restaurantId: string, token: string, baseUrl?: string): Promise<Table[]> {
+    const query = new URLSearchParams({ restaurantId });
+    if (baseUrl) query.append('baseUrl', baseUrl);
+    return apiClient.get<Table[]>(`/api/admin/tables?${query.toString()}`, { token });
+  },
+
+  async getNetworkInfo(token: string): Promise<{ lanIp: string; configuredUrl: string; lanUrl: string }> {
+    try {
+      return await apiClient.get('/api/admin/tables/network-info', { token });
+    } catch (e) {
+      return {
+        lanIp: 'localhost',
+        configuredUrl: 'http://localhost:3000',
+        lanUrl: 'http://localhost:3000',
+      };
+    }
   },
 
   async createTable(data: { restaurantId: string; tableNumber: string; capacity?: number; status?: any; isActive?: boolean; branchId?: string }, token: string): Promise<Table> {
     return apiClient.post<Table>('/api/admin/tables', data, { token });
   },
 
-  async updateTable(id: string, data: Partial<Table>, token: string): Promise<Table> {
-    return apiClient.patch<Table>(`/api/admin/tables/${id}`, data, { token });
+  async updateTable(id: string, data: any, token: string): Promise<any> {
+    return apiClient.patch<any>(`/api/admin/tables/${id}`, data, { token });
   },
 
   async deleteTable(id: string, token: string): Promise<{ id: string }> {
     return apiClient.delete<{ id: string }>(`/api/admin/tables/${id}`, { token });
   },
 
-  async regenerateQR(id: string, token: string): Promise<{ id: string; qrToken: string; qrUrl: string }> {
-    return apiClient.post(`/api/admin/tables/${id}/regenerate-qr`, {}, { token });
+  async regenerateQR(id: string, token: string, baseUrl?: string): Promise<{ id: string; qrToken: string; qrUrl: string }> {
+    return apiClient.post(`/api/admin/tables/${id}/regenerate-qr`, { baseUrl }, { token });
   },
 
   // ── Categories

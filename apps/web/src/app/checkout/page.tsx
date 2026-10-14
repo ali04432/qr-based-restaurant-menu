@@ -150,8 +150,9 @@ export default function CheckoutPage() {
             return 'Restaurant information is missing. Please re-scan the restaurant QR code.';
         }
 
-        if (!tableId) {
-            return 'Table information is missing. Please re-scan the table QR code before placing your order.';
+        const effectiveTable = tableId || tableNumber;
+        if (!effectiveTable) {
+            return 'Table information is missing. Please scan your table QR code before placing your order.';
         }
 
         return null;
@@ -167,10 +168,12 @@ export default function CheckoutPage() {
                 return null;
             }
 
+            const effectiveTable = tableId || tableNumber;
+
             const request: CustomerOrderRequest = {
                 restaurantId: String(restaurantId),
 
-                tableId: String(tableId),
+                tableId: String(effectiveTable),
 
                 customerPhone: customerInfo.phone ? customerInfo.phone.trim() : undefined,
 

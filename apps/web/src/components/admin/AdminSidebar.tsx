@@ -9,6 +9,7 @@ import {
   ChefHat,
   ConciergeBell,
   Grid,
+  QrCode,
   UtensilsCrossed,
   Layers,
   Boxes,
@@ -65,7 +66,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     name: 'Kitchen Display',
-    href: '/admin/kitchen',
+    href: '/kds',
     icon: ChefHat,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.CHEF],
   },
@@ -78,7 +79,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     name: 'Tables & QR',
     href: '/admin/tables',
-    icon: Grid,
+    icon: QrCode,
     allowedRoles: [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.WAITER],
   },
   {

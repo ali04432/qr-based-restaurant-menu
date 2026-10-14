@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import os from 'os';
 import { prisma } from '../../config/database';
 import { sendSuccess, sendCreated } from '../../utils/api-response';
 import { AppError } from '../../middleware/error.middleware';
@@ -11,6 +12,43 @@ import { createTableAdminSchema, updateTableAdminSchema } from '@qr-menu/shared'
 import { logStaffAction } from '../../utils/audit';
 
 const router = Router();
+
+function getLocalIpAddress(): string {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function buildCustomerMenuUrl(baseUrl: string, restaurantId: string, tableNumber: string, tableId: string, token: string): string {
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  return `${cleanBase}/menu?restaurant=${restaurantId}&table=${encodeURIComponent(tableNumber)}&tableId=${encodeURIComponent(tableId)}&token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * GET /api/admin/tables/network-info
+ * Returns local machine LAN IP and base URL configuration for easy mobile testing.
+ */
+router.get(
+  '/network-info',
+  authMiddleware,
+  async (_req: AuthenticatedRequest, res: Response) => {
+    const lanIp = getLocalIpAddress();
+    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const lanUrl = lanIp !== 'localhost' ? `http://${lanIp}:3000` : configuredUrl;
+
+    return sendSuccess(res, {
+      lanIp,
+      configuredUrl,
+      lanUrl,
+    });
+  }
+);
 
 /**
  * GET /api/admin/tables
@@ -37,27 +75,37 @@ router.get(
         return next(new AppError('Restaurant ID is required', 400, 'VALIDATION_ERROR'));
       }
 
-      const tables = await prisma.table.findMany({
-        where: { restaurantId },
-        include: {
-          _count: {
-            select: {
-              orders: {
-                where: {
-                  status: { in: ['PENDING', 'RECEIVED', 'PREPARING', 'IN_KITCHEN', 'COOKING', 'READY'] as any },
+      const clientBaseUrl = (req.query.baseUrl as string) || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+      const [tables, restaurant] = await Promise.all([
+        prisma.table.findMany({
+          where: { restaurantId },
+          include: {
+            _count: {
+              select: {
+                orders: {
+                  where: {
+                    status: { in: ['PENDING', 'RECEIVED', 'PREPARING', 'IN_KITCHEN', 'COOKING', 'READY'] as any },
+                  },
                 },
               },
             },
           },
-        },
-        orderBy: { tableNumber: 'asc' },
-      });
+          orderBy: { tableNumber: 'asc' },
+        }),
+        prisma.restaurant.findUnique({
+          where: { id: restaurantId },
+          select: { id: true, name: true, logo: true, currency: true },
+        }),
+      ]);
 
       const formatted = tables.map((t) => ({
         id: t.id,
         restaurantId: t.restaurantId,
+        restaurantName: restaurant?.name || 'Restaurant',
         tableNumber: t.tableNumber,
         qrToken: t.qrToken,
+        qrUrl: buildCustomerMenuUrl(clientBaseUrl, t.restaurantId, t.tableNumber, t.id, t.qrToken),
         capacity: t.capacity,
         status: t.status,
         isActive: t.isActive,
@@ -207,7 +255,10 @@ router.post(
         );
       }
 
-      return sendSuccess(res, updated, { message: 'QR Code regenerated successfully' });
+      const clientBaseUrl = (req.body?.baseUrl as string) || (req.query?.baseUrl as string) || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const qrUrl = buildCustomerMenuUrl(clientBaseUrl, table.restaurantId, updated.tableNumber, updated.id, updated.qrToken);
+
+      return sendSuccess(res, { ...updated, qrUrl }, { message: 'QR Code regenerated successfully' });
     } catch (err) {
       return next(err);
     }

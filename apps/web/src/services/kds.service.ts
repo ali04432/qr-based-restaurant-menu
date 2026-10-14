@@ -4,16 +4,16 @@ import { apiClient } from '../lib/api-client';
 export const kdsService = {
   /** Fetch live orders for the KDS */
   async getOrders(restaurantId: string, token: string): Promise<Order[]> {
-    // Dev bypass: skip real API call for mock sessions
-    if (token === 'mock-chef-token') {
-      return getMockOrders(restaurantId);
-    }
     try {
       const orders = await apiClient.get<Order[]>(`/api/orders?restaurantId=${restaurantId}`, { token });
-      return orders;
+      return Array.isArray(orders) ? orders : [];
     } catch (e) {
-      console.warn('Failed to fetch real orders from API, falling back to mock seed.', e);
-      return getMockOrders(restaurantId);
+      console.warn('[KDS] Failed to fetch real orders from API:', e);
+      // Fallback for offline development mock session only
+      if (token === 'mock-chef-token') {
+        return getMockOrders(restaurantId);
+      }
+      return [];
     }
   },
 

@@ -105,7 +105,7 @@ app.post("/api/seed", async (_req: Request, res: Response) => {
       id: `b000000${i + 1}-0000-0000-0000-000000000001`,
       restaurantId: restaurant.id,
       tableNumber: num,
-      qrCodeUrl: `http://localhost:3000/menu?restaurant=${restaurant.id}&table=b000000${i + 1}-0000-0000-0000-000000000001`,
+      qrCodeUrl: `${(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '')}/menu?restaurant=${restaurant.id}&table=b000000${i + 1}-0000-0000-0000-000000000001`,
     }));
 
     for (const table of tableData) {

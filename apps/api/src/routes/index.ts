@@ -5,6 +5,7 @@ import menuRouter from './menu.routes';
 import orderRouter from './order.routes';
 import loyaltyRouter from './loyalty.routes';
 import aiRouter from './ai.routes';
+import tableRouter from './table.routes';
 
 // Admin Routers (Phase 3 & Phase 4)
 import adminDashboardRouter from './admin/dashboard.routes';
@@ -53,6 +54,7 @@ router.use('/health', healthRouter);
 // ── Customer facing routes
 router.use('/auth', authRouter);           // POST /api/auth/register, /login, GET /api/auth/me
 router.use('/menu', menuRouter);           // GET /api/menu/categories, /items, /items/:id
+router.use('/tables', tableRouter);         // GET /api/tables/validate, /api/tables/:id
 router.use('/orders', orderRouter);        // POST /api/orders, GET /api/orders/:id, PATCH /:id/status
 router.use('/feedback', adminFeedbackRouter); // POST /api/feedback (customer feedback)
 router.use('/promotions', adminPromotionRouter); // POST /api/promotions/validate (customer discount validation)
