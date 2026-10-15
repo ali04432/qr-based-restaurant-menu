@@ -709,6 +709,31 @@ export const adminService = {
     return apiClient.get(`/api/admin/ar/analytics?days=${days}`, { token: token || undefined });
   },
 
+  async uploadArModel(
+    file: File,
+    token?: string | null
+  ): Promise<{ url: string; filename: string; originalname: string; size: number; mimeType: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', file);
+    const baseUrl =
+      typeof window === 'undefined'
+        ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
+        : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? '');
+    const res = await fetch(`${baseUrl}/api/admin/ar/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json?.error?.message || json?.message || 'Failed to upload 3D model');
+    }
+    return json.data;
+  },
+
   // ── Event Management (Phase 6)
   async getEvents(restaurantId: string, token: string): Promise<Event[]> {
     return apiClient.get(`/api/admin/events?restaurantId=${restaurantId}`, { token });

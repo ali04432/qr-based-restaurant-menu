@@ -123,6 +123,8 @@ export default function FoodGrid({ category = "All", searchQuery = "" }: FoodGri
             imageUrl: item.image,
             badge: item.badge,
             available: item.isAvailable,
+            hasAr: item.hasAr,
+            modelUrl: item.modelUrl,
           }}
         />
       ))}

@@ -21,6 +21,8 @@ export interface MenuItem {
   prepTime?: string;
   prepTimeMin?: number;
   prepTimeMax?: number;
+  hasAr?: boolean;
+  modelUrl?: string | null;
 }
 
 export interface CartItem {

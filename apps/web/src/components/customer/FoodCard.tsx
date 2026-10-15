@@ -8,6 +8,7 @@ import {
   Star,
   Eye,
   ShoppingCart,
+  Box,
 } from 'lucide-react';
 
 import { useCart } from '../../context/CartContext';
@@ -22,6 +23,8 @@ interface FoodItem {
   imageUrl: string;
   badge?: string;
   available?: boolean;
+  hasAr?: boolean;
+  modelUrl?: string | null;
 }
 
 interface FoodCardProps {
@@ -128,6 +131,14 @@ export default function FoodCard({
         {!available && (
           <span className="absolute left-3 top-3 rounded-full border border-red-500/30 bg-[var(--bg-secondary)]/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-400 backdrop-blur-md">
             Unavailable
+          </span>
+        )}
+
+        {/* 3D / AR Badge */}
+        {(item.hasAr || !!item.modelUrl) && (
+          <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-black/80 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-400 backdrop-blur-md shadow-lg transition-transform duration-300 group-hover:scale-105">
+            <Box className="h-3 w-3 text-amber-400 animate-pulse" />
+            <span>3D / AR</span>
           </span>
         )}
 

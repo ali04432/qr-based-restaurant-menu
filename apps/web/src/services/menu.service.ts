@@ -9,6 +9,7 @@ interface BackendMenuItem {
   price: number;
   imageUrl?: string | null;
   modelUrl?: string | null;
+  hasAr?: boolean;
   category: string;
   isAvailable?: boolean;
 }
@@ -28,10 +29,13 @@ interface BackendMenuResponse {
   menu: Record<string, BackendMenuItem[]>;
 }
 
+// Single source of truth for API base URL.
+// NEXT_PUBLIC_API_URL is preferred; NEXT_PUBLIC_API_BASE_URL kept for backward compat.
+// Server-side uses API_BASE_URL (non-public, not exposed to browser).
 const API_BASE =
   typeof window === 'undefined'
-    ? (process.env.API_BASE_URL ?? 'http://localhost:4000')
-    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000');
+    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
+    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000');
 
 function mapBackendItemToMenuItem(
   item: BackendMenuItem,
@@ -71,6 +75,8 @@ function mapBackendItemToMenuItem(
     badge: item.category.toLowerCase().includes('special') ? 'Chef\'s Pick' : 'Popular',
     tags: ['Halal'],
     isAvailable: item.isAvailable !== false,
+    hasAr: item.hasAr ?? !!item.modelUrl,
+    modelUrl: item.modelUrl ?? null,
   };
 }
 
@@ -177,12 +183,14 @@ export const menuService = {
 
   async getMenuItem(itemId: string): Promise<MenuItem | null> {
     try {
-      const res = await fetch(`${API_BASE}/api/menu/item/${encodeURIComponent(itemId)}`, {
+      // FIX: route is /items/:id (plural), not /item/:id
+      const res = await fetch(`${API_BASE}/api/menu/items/${encodeURIComponent(itemId)}`, {
         cache: 'no-store',
       });
       if (res.ok) {
-        const item: BackendMenuItem = await res.json();
-        return mapBackendItemToMenuItem(item, item.restaurantId || '1');
+        const json = await res.json();
+        const rawItem: BackendMenuItem = json.data ?? json;
+        return mapBackendItemToMenuItem(rawItem, rawItem.restaurantId || '1');
       }
     } catch (err) {
       console.warn('[menuService] Could not fetch single item from API:', err);

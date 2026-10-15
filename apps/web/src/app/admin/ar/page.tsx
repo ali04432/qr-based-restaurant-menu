@@ -20,6 +20,7 @@ import {
   Check,
   Zap,
   Info,
+  Upload,
 } from 'lucide-react';
 import { AdminLayout } from '../../../components/admin/AdminLayout';
 import { adminService } from '../../../services/admin.service';
@@ -82,6 +83,40 @@ export default function AdminArPage() {
 
   // Copy URL indicator
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Model upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'modelUrl' | 'iosModelUrl') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError('File size exceeds 10 MB limit');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setFormError('');
+      setUploadProgress(`Uploading ${file.name}...`);
+      const res = await adminService.uploadArModel(file, token);
+      if (targetField === 'modelUrl') {
+        setModelUrl(res.url);
+      } else {
+        setIosModelUrl(res.url);
+      }
+      setUploadProgress(`Uploaded: ${res.filename}`);
+      setTimeout(() => setUploadProgress(null), 3000);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setFormError(error?.message || 'Failed to upload 3D model');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -752,9 +787,9 @@ export default function AdminArPage() {
                       onChange={(e) => setAssetType(e.target.value as any)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500"
                     >
-                      <option value="MODEL_3D">3D Model (GLTF / GLB)</option>
-                      <option value="AR_GLTF">AR GLTF (WebXR compatible)</option>
-                      <option value="AR_USDZ">AR QuickLook (Apple iOS)</option>
+                      <option value="MODEL_3D">3D Model (Binary GLB)</option>
+                      <option value="AR_GLTF">AR GLB (WebXR Android/Chrome)</option>
+                      <option value="AR_USDZ">AR QuickLook (Apple iOS USDZ)</option>
                     </select>
                   </div>
 
@@ -775,31 +810,58 @@ export default function AdminArPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-300 mb-1.5">
-                    3D Model URL (.glb / .gltf) *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold uppercase text-slate-300">
+                      3D Model URL (.glb) *
+                    </label>
+                    <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold inline-flex items-center gap-1.5 transition">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploading ? 'Uploading...' : 'Upload GLB (<10MB)'}</span>
+                      <input
+                        type="file"
+                        accept=".glb"
+                        disabled={isUploading}
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, 'modelUrl')}
+                      />
+                    </label>
+                  </div>
                   <input
-                    type="url"
+                    type="text"
                     required
                     value={modelUrl}
                     onChange={(e) => setModelUrl(e.target.value)}
-                    placeholder="https://.../models/dish.glb"
+                    placeholder="/models/dish.glb or https://..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500 font-mono"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Direct public URL to a binary GLTF (.glb) file.
-                  </p>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                    <span>Direct public URL or relative path (e.g. /models/avocado.glb).</span>
+                    {uploadProgress && <span className="text-amber-400 font-medium">{uploadProgress}</span>}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-300 mb-1.5">
-                    iOS Quick Look URL (.usdz, Optional)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold uppercase text-slate-300">
+                      iOS Quick Look URL (.usdz, Optional)
+                    </label>
+                    <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold inline-flex items-center gap-1.5 transition">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploading ? 'Uploading...' : 'Upload USDZ (<10MB)'}</span>
+                      <input
+                        type="file"
+                        accept=".usdz"
+                        disabled={isUploading}
+                        className="hidden"
+                        onChange={(e) => handleFileUpload(e, 'iosModelUrl')}
+                      />
+                    </label>
+                  </div>
                   <input
-                    type="url"
+                    type="text"
                     value={iosModelUrl}
                     onChange={(e) => setIosModelUrl(e.target.value)}
-                    placeholder="https://.../models/dish.usdz"
+                    placeholder="/models/dish.usdz or https://..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500 font-mono"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
@@ -812,10 +874,10 @@ export default function AdminArPage() {
                     Preview Thumbnail URL (Optional)
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={previewImage}
                     onChange={(e) => setPreviewImage(e.target.value)}
-                    placeholder="https://.../dish-preview.jpg"
+                    placeholder="/images/dish-preview.jpg or https://..."
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-sm focus:outline-none focus:border-amber-500"
                   />
                 </div>

@@ -24,6 +24,8 @@ export interface MenuItem {
   tags: DietaryTag[];
   nutrition?: NutritionInfo;
   isAvailable: boolean;
+  hasAr?: boolean;
+  modelUrl?: string | null;
 }
 
 export interface MenuCategory {

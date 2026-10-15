@@ -180,6 +180,7 @@ export default function FoodDetailsPage() {
                   heightCm={arAsset.heightCm}
                   depthCm={arAsset.depthCm}
                   portionLabel={arAsset.portionLabel}
+                  isSample={Boolean(arAsset.name?.toLowerCase().includes('sample') || arAsset.modelUrl?.includes('avocado.glb') || arAsset.portionLabel?.toLowerCase().includes('sample'))}
                   onEvent={handleArEvent}
                 />
                 {/* Favorite button overlaid */}
@@ -197,13 +198,19 @@ export default function FoodDetailsPage() {
                 </button>
               </div>
             ) : (
-              /* No AR asset — standard image */
+              /* No AR asset — standard image with coming soon badge */
               <div className="relative overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--bg-card)]">
                 <div className="aspect-[4/3] min-h-[320px]">
                   <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
                 </div>
 
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+                {/* 3D view coming soon badge */}
+                <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-slate-950/80 px-3.5 py-2 text-xs font-semibold text-amber-300 backdrop-blur-md shadow-md">
+                  <Box className="h-4 w-4 text-amber-400" />
+                  <span>3D view coming soon</span>
+                </div>
 
                 {item.badge && (
                   <div className="absolute left-4 top-4 rounded-full border border-[var(--accent-gold)]/30 bg-black/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--accent-gold)] backdrop-blur-md">
