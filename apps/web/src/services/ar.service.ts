@@ -4,8 +4,10 @@
 // ============================================================
 
 // Unified API base — same variable as menu.service.ts.
-// NEXT_PUBLIC_API_URL is the single source; fallback keeps backward compat.
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000') + '/api';
+const API_BASE =
+  typeof window === 'undefined'
+    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api'
+    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ? `${(process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL)}/api` : '/api');
 
 export interface ArAssetData {
   id: string;

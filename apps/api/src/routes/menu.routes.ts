@@ -175,6 +175,8 @@ router.get('/items', async (req: Request, res: Response, next: NextFunction) => 
     });
     const mapped = items.map(item => ({
       ...item,
+      category: item.category?.name || 'General',
+      categoryDetails: item.category,
       imageUrl: item.image,
       modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
       hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
@@ -304,6 +306,8 @@ router.get(['/items/:id', '/item/:id'], async (req: Request, res: Response, next
     }
     const mapped = {
       ...item,
+      category: item.category?.name || 'General',
+      categoryDetails: item.category,
       imageUrl: item.image,
       modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
       hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
