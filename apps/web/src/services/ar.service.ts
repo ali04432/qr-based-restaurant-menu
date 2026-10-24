@@ -3,11 +3,17 @@
 // Handles AR asset fetching and telemetry tracking
 // ============================================================
 
-// Unified API base — same variable as menu.service.ts.
-const API_BASE =
-  typeof window === 'undefined'
-    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api'
-    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ? `${(process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL)}/api` : '/api');
+// Safe base URL resolution for server vs client.
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const publicUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (publicUrl && !publicUrl.includes('localhost') && !publicUrl.includes('127.0.0.1') && publicUrl.startsWith('http')) {
+      return publicUrl.replace(/\/$/, '');
+    }
+    return '';
+  }
+  return process.env.API_INTERNAL_URL || process.env.API_BASE_URL || 'http://localhost:4000';
+}
 
 export interface ArAssetData {
   id: string;
@@ -30,8 +36,10 @@ export interface ArAssetData {
  * Returns null if no AR asset is linked.
  */
 export async function getArAssetForItem(menuItemId: string): Promise<ArAssetData | null> {
+  if (!menuItemId) return null;
   try {
-    const res = await fetch(`${API_BASE}/menu/items/${menuItemId}/ar-asset`);
+    const base = getApiBase();
+    const res = await fetch(`${base}/api/menu/items/${encodeURIComponent(menuItemId)}/ar-asset`);
     if (!res.ok) return null;
     const json = await res.json();
     return json?.data ?? null;
@@ -54,7 +62,8 @@ export function trackArEvent(payload: {
   metadata?: Record<string, unknown>;
 }): void {
   try {
-    fetch(`${API_BASE}/admin/ar/track`, {
+    const base = getApiBase();
+    fetch(`${base}/api/admin/ar/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

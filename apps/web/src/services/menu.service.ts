@@ -30,13 +30,19 @@ interface BackendMenuResponse {
   menu: Record<string, BackendMenuItem[]>;
 }
 
-// Single source of truth for API base URL.
-// NEXT_PUBLIC_API_URL is preferred; NEXT_PUBLIC_API_BASE_URL kept for backward compat.
-// Server-side uses API_BASE_URL (non-public, not exposed to browser).
-const API_BASE =
-  typeof window === 'undefined'
-    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
-    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? '');
+// Safe base URL resolution for server vs client.
+// In the browser, always default to relative paths ('') so requests match the current
+// origin (localhost, 127.0.0.1, LAN IP, or tunnel domain) without CORS issues.
+export function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const publicUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (publicUrl && !publicUrl.includes('localhost') && !publicUrl.includes('127.0.0.1') && publicUrl.startsWith('http')) {
+      return publicUrl.replace(/\/$/, '');
+    }
+    return '';
+  }
+  return process.env.API_INTERNAL_URL || process.env.API_BASE_URL || 'http://localhost:4000';
+}
 
 function mapBackendItemToMenuItem(
   item: BackendMenuItem,
@@ -86,6 +92,7 @@ function mapBackendItemToMenuItem(
     isAvailable: item.isAvailable !== false,
     hasAr: item.hasAr ?? !!item.modelUrl,
     modelUrl: item.modelUrl ?? null,
+    arAsset: (item as any).arAsset ?? null,
   };
 }
 
@@ -102,8 +109,9 @@ export const menuService = {
     const restId = restaurantId || 'ffed1622-07e2-4b76-a0e7-5de417637740';
 
     try {
-      const baseOrigin = typeof window !== 'undefined' ? window.location.origin : (API_BASE || 'http://localhost:4000');
-      const url = new URL(`${API_BASE ? API_BASE : ''}/api/menu`, baseOrigin);
+      const base = getApiBase();
+      const baseOrigin = typeof window !== 'undefined' ? window.location.origin : (base || 'http://localhost:4000');
+      const url = new URL(`${base}/api/menu`, baseOrigin);
       url.searchParams.set('restaurant', restId);
       if (tableId) url.searchParams.set('table', tableId);
 
@@ -192,15 +200,25 @@ export const menuService = {
 
 
   async getMenuItem(itemId: string): Promise<MenuItem | null> {
+    if (!itemId) return null;
     try {
-      // FIX: route is /items/:id (plural), not /item/:id
-      const res = await fetch(`${API_BASE}/api/menu/items/${encodeURIComponent(itemId)}`, {
+      const base = getApiBase();
+      const url = `${base}/api/menu/items/${encodeURIComponent(itemId)}`;
+      const res = await fetch(url, {
         cache: 'no-store',
       });
       if (res.ok) {
         const json = await res.json();
-        const rawItem: BackendMenuItem = json.data ?? json;
+        // Support either standard API envelope { success: true, data: { ... } } or raw item object
+        const rawItem: BackendMenuItem =
+          json && typeof json === 'object' && 'data' in json && json.data ? json.data : json;
+        if (!rawItem || typeof rawItem !== 'object') {
+          return null;
+        }
         return mapBackendItemToMenuItem(rawItem, rawItem.restaurantId || '1');
+      }
+      if (res.status === 404) {
+        return null;
       }
     } catch (err) {
       console.warn('[menuService] Could not fetch single item from API:', err);

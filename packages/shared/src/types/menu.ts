@@ -26,6 +26,7 @@ export interface MenuItem {
   isAvailable: boolean;
   hasAr?: boolean;
   modelUrl?: string | null;
+  arAsset?: any;
 }
 
 export interface MenuCategory {

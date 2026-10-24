@@ -17,6 +17,7 @@ import {
   Clock,
   Flame,
   Box,
+  RefreshCw,
 } from 'lucide-react';
 
 import CustomerLayout from '../../../../components/customer/CustomerLayout';
@@ -37,6 +38,7 @@ export default function FoodDetailsPage() {
   const [item, setItem] = useState<MenuItem | null>(null);
   const [suggestions, setSuggestions] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [instructions, setInstructions] = useState('');
   const [added, setAdded] = useState(false);
@@ -44,27 +46,59 @@ export default function FoodDetailsPage() {
 
   const isFavorite = item ? favorites.includes(item.id) : false;
 
+  const loadDish = useCallback(async () => {
+    if (!itemId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const fetched = await menuService.getMenuItem(itemId);
+      setItem(fetched);
+
+      if ((fetched as any)?.arAsset) {
+        setArAsset((fetched as any).arAsset);
+      }
+    } catch (err: any) {
+      console.error('[FoodDetailsPage] Failed to load dish details:', err);
+      setError(err?.message || 'Unable to load dish details. Please check your network connection.');
+    } finally {
+      setLoading(false);
+    }
+
+    // Attempt to fetch dedicated AR asset metadata if available
+    try {
+      const asset = await getArAssetForItem(itemId);
+      if (asset) {
+        setArAsset(asset);
+      }
+    } catch (err) {
+      console.warn('[FoodDetailsPage] Optional AR asset fetch error:', err);
+    }
+  }, [itemId]);
+
+  useEffect(() => {
+    loadDish();
+  }, [loadDish]);
+
+  // Load suggestions independently so restaurantId changes do not restart dish loading
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
+    if (!itemId) return;
 
-    menuService.getMenuItem(itemId).then((fetched) => {
-      if (isMounted) {
-        setItem(fetched);
-        setLoading(false);
-      }
-    });
-
-    menuService.getMenuItems(restaurantId || undefined).then((all) => {
-      if (isMounted) {
-        setSuggestions(all.filter((i) => i.id !== itemId).slice(0, 3));
-      }
-    });
-
-    // Fetch AR asset if available
-    getArAssetForItem(itemId).then((asset) => {
-      if (isMounted) setArAsset(asset);
-    });
+    menuService
+      .getMenuItems(restaurantId || undefined)
+      .then((all) => {
+        if (isMounted) {
+          setSuggestions(all.filter((i) => i.id !== itemId).slice(0, 3));
+        }
+      })
+      .catch(() => {
+        // Non-critical suggestions failure
+      });
 
     return () => {
       isMounted = false;
@@ -122,6 +156,41 @@ export default function FoodDetailsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <CustomerLayout>
+        <div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-4">
+          <div className="w-full rounded-3xl border border-[var(--border-color)] bg-[var(--bg-card)] p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10">
+              <CircleAlert className="h-6 w-6 text-red-400" />
+            </div>
+
+            <h1 className="mt-5 text-2xl font-black text-[var(--text-primary)]">Unable to load dish</h1>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">{error}</p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={loadDish}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[var(--accent-gold)] px-5 text-sm font-bold text-black transition hover:brightness-105"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </button>
+              <Link
+                href="/"
+                className="inline-flex h-11 items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-elevated)] px-5 text-sm font-bold text-[var(--text-primary)] transition hover:border-[var(--accent-gold)]/30"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Menu
+              </Link>
+            </div>
+          </div>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
   if (!item) {
     return (
       <CustomerLayout>
@@ -149,6 +218,24 @@ export default function FoodDetailsPage() {
     );
   }
 
+  const activeAr: ArAssetData | null =
+    arAsset ||
+    ((item as any)?.arAsset as ArAssetData) ||
+    (item.hasAr && item.modelUrl
+      ? {
+          id: item.id,
+          name: item.name,
+          modelUrl: item.modelUrl,
+          previewImage: item.image,
+          widthCm: 20,
+          heightCm: 8,
+          depthCm: 20,
+          portionLabel: 'Sample – avocado placeholder',
+          scale: 1,
+          status: 'ACTIVE',
+        }
+      : null);
+
   return (
     <CustomerLayout>
       <div className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-5 sm:px-6 sm:pt-7 lg:px-8">
@@ -167,20 +254,20 @@ export default function FoodDetailsPage() {
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           {/* Image / 3D Viewer */}
           <div className="relative">
-            {arAsset ? (
+            {activeAr ? (
               /* AR asset available — show 3D viewer */
               <div>
                 <Model3DViewer
-                  modelUrl={arAsset.modelUrl}
-                  iosModelUrl={arAsset.iosModelUrl}
-                  previewImage={arAsset.previewImage || item.image}
+                  modelUrl={activeAr.modelUrl}
+                  iosModelUrl={activeAr.iosModelUrl}
+                  previewImage={activeAr.previewImage || item.image}
                   name={item.name}
-                  scale={arAsset.scale}
-                  widthCm={arAsset.widthCm}
-                  heightCm={arAsset.heightCm}
-                  depthCm={arAsset.depthCm}
-                  portionLabel={arAsset.portionLabel}
-                  isSample={Boolean(arAsset.name?.toLowerCase().includes('sample') || arAsset.modelUrl?.includes('avocado.glb') || arAsset.portionLabel?.toLowerCase().includes('sample'))}
+                  scale={activeAr.scale}
+                  widthCm={activeAr.widthCm}
+                  heightCm={activeAr.heightCm}
+                  depthCm={activeAr.depthCm}
+                  portionLabel={activeAr.portionLabel}
+                  isSample={Boolean(activeAr.name?.toLowerCase().includes('sample') || activeAr.modelUrl?.includes('avocado.glb') || activeAr.portionLabel?.toLowerCase().includes('sample'))}
                   onEvent={handleArEvent}
                 />
                 {/* Favorite button overlaid */}
