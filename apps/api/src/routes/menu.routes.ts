@@ -69,7 +69,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       }),
       prisma.menuItem.findMany({
         where: { restaurantId: restaurant.id, isAvailable: true },
-        include: { category: { select: { id: true, name: true } } },
+        include: {
+          category: { select: { id: true, name: true } },
+          arAsset: { select: { id: true, modelUrl: true, status: true } },
+        },
         orderBy: { name: 'asc' },
       }),
     ]);
@@ -92,7 +95,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         description: item.description,
         price: item.price,
         imageUrl: item.image,
-        modelUrl: null,
+        modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
+        hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
         category: catName,
         isAvailable: item.isAvailable,
       });
@@ -163,9 +167,21 @@ router.get('/items', async (req: Request, res: Response, next: NextFunction) => 
           ],
         }),
       },
+      include: {
+        category: { select: { id: true, name: true } },
+        arAsset: { select: { id: true, modelUrl: true, status: true } },
+      },
       orderBy: { name: 'asc' },
     });
-    return sendSuccess(res, items);
+    const mapped = items.map(item => ({
+      ...item,
+      category: item.category?.name || 'General',
+      categoryDetails: item.category,
+      imageUrl: item.image,
+      modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
+      hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
+    }));
+    return sendSuccess(res, mapped);
   } catch (err) {
     return next(err);
   }
@@ -278,11 +294,25 @@ router.get(['/items/:id', '/item/:id'], async (req: Request, res: Response, next
   const { id } = req.params;
 
   try {
-    const item = await prisma.menuItem.findUnique({ where: { id } });
+    const item = await prisma.menuItem.findUnique({
+      where: { id },
+      include: {
+        category: { select: { id: true, name: true } },
+        arAsset: true,
+      },
+    });
     if (!item || !item.isAvailable) {
       return next(new AppError('Menu item not found', 404, 'NOT_FOUND'));
     }
-    return sendSuccess(res, item);
+    const mapped = {
+      ...item,
+      category: item.category?.name || 'General',
+      categoryDetails: item.category,
+      imageUrl: item.image,
+      modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
+      hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
+    };
+    return sendSuccess(res, mapped);
   } catch (err) {
     return next(err);
   }
@@ -389,7 +419,7 @@ router.delete(
  * Returns the AR asset linked to a menu item (if any).
  * Public endpoint — no auth required (accessible from customer QR scan session).
  */
-router.get('/items/:id/ar-asset', async (req: Request, res: Response, next: NextFunction) => {
+router.get(['/items/:id/ar-asset', '/item/:id/ar-asset'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const asset = await prisma.arAsset.findUnique({
       where: { menuItemId: req.params.id },

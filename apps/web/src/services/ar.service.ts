@@ -3,7 +3,11 @@
 // Handles AR asset fetching and telemetry tracking
 // ============================================================
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+// Unified API base — same variable as menu.service.ts.
+const API_BASE =
+  typeof window === 'undefined'
+    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000') + '/api'
+    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ? `${(process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL)}/api` : '/api');
 
 export interface ArAssetData {
   id: string;

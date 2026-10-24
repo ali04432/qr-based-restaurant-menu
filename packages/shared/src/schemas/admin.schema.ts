@@ -81,6 +81,13 @@ export const createMenuItemAdminSchema = z.object({
   badge: z.string().optional().nullable(),
   tags: z.array(z.string()).default([]),
   image: z.string().optional().or(z.literal('')).nullable(),
+  modelUrl: z.string().optional().nullable(),
+  iosModelUrl: z.string().optional().nullable(),
+  scale: z.number().optional().nullable(),
+  widthCm: z.number().optional().nullable(),
+  heightCm: z.number().optional().nullable(),
+  depthCm: z.number().optional().nullable(),
+  portionLabel: z.string().optional().nullable(),
 });
 
 export const updateMenuItemAdminSchema = z.object({
@@ -99,6 +106,13 @@ export const updateMenuItemAdminSchema = z.object({
   badge: z.string().optional().nullable(),
   tags: z.array(z.string()).optional(),
   image: z.string().optional().or(z.literal('')).nullable(),
+  modelUrl: z.string().optional().nullable(),
+  iosModelUrl: z.string().optional().nullable(),
+  scale: z.number().optional().nullable(),
+  widthCm: z.number().optional().nullable(),
+  heightCm: z.number().optional().nullable(),
+  depthCm: z.number().optional().nullable(),
+  portionLabel: z.string().optional().nullable(),
 });
 
 // ============================================================

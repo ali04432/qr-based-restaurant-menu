@@ -8,8 +8,10 @@ interface BackendMenuItem {
   description?: string | null;
   price: number;
   imageUrl?: string | null;
+  image?: string | null;
   modelUrl?: string | null;
-  category: string;
+  hasAr?: boolean;
+  category: string | { id?: string; name: string };
   isAvailable?: boolean;
 }
 
@@ -28,10 +30,13 @@ interface BackendMenuResponse {
   menu: Record<string, BackendMenuItem[]>;
 }
 
+// Single source of truth for API base URL.
+// NEXT_PUBLIC_API_URL is preferred; NEXT_PUBLIC_API_BASE_URL kept for backward compat.
+// Server-side uses API_BASE_URL (non-public, not exposed to browser).
 const API_BASE =
   typeof window === 'undefined'
-    ? (process.env.API_BASE_URL ?? 'http://localhost:4000')
-    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000');
+    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000')
+    : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? '');
 
 function mapBackendItemToMenuItem(
   item: BackendMenuItem,
@@ -51,15 +56,23 @@ function mapBackendItemToMenuItem(
     'Chef\'s Specials': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=85',
   };
 
+  const categoryName =
+    typeof item.category === 'string'
+      ? item.category
+      : (typeof item.category === 'object' && item.category !== null && 'name' in item.category)
+      ? (item.category as { name: string }).name
+      : 'General';
+
   const image =
     item.imageUrl ||
-    defaultImages[item.category] ||
+    item.image ||
+    defaultImages[categoryName] ||
     'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=85';
 
   return {
     id: item.id,
     restaurantId,
-    categoryId: `cat-${item.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+    categoryId: `cat-${categoryName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
     name: item.name,
     description: item.description || `Fresh and delicious ${item.name} made with premium ingredients.`,
     price: Number(item.price),
@@ -68,9 +81,11 @@ function mapBackendItemToMenuItem(
     reviewCount: 120,
     prepTimeMin: 15,
     prepTimeMax: 25,
-    badge: item.category.toLowerCase().includes('special') ? 'Chef\'s Pick' : 'Popular',
+    badge: categoryName.toLowerCase().includes('special') ? 'Chef\'s Pick' : 'Popular',
     tags: ['Halal'],
     isAvailable: item.isAvailable !== false,
+    hasAr: item.hasAr ?? !!item.modelUrl,
+    modelUrl: item.modelUrl ?? null,
   };
 }
 
@@ -87,7 +102,8 @@ export const menuService = {
     const restId = restaurantId || 'ffed1622-07e2-4b76-a0e7-5de417637740';
 
     try {
-      const url = new URL(`${API_BASE}/api/menu`);
+      const baseOrigin = typeof window !== 'undefined' ? window.location.origin : (API_BASE || 'http://localhost:4000');
+      const url = new URL(`${API_BASE ? API_BASE : ''}/api/menu`, baseOrigin);
       url.searchParams.set('restaurant', restId);
       if (tableId) url.searchParams.set('table', tableId);
 
@@ -177,12 +193,14 @@ export const menuService = {
 
   async getMenuItem(itemId: string): Promise<MenuItem | null> {
     try {
-      const res = await fetch(`${API_BASE}/api/menu/item/${encodeURIComponent(itemId)}`, {
+      // FIX: route is /items/:id (plural), not /item/:id
+      const res = await fetch(`${API_BASE}/api/menu/items/${encodeURIComponent(itemId)}`, {
         cache: 'no-store',
       });
       if (res.ok) {
-        const item: BackendMenuItem = await res.json();
-        return mapBackendItemToMenuItem(item, item.restaurantId || '1');
+        const json = await res.json();
+        const rawItem: BackendMenuItem = json.data ?? json;
+        return mapBackendItemToMenuItem(rawItem, rawItem.restaurantId || '1');
       }
     } catch (err) {
       console.warn('[menuService] Could not fetch single item from API:', err);

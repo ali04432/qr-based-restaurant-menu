@@ -104,6 +104,8 @@ export default function FavoritesPage() {
                   imageUrl: item.image,
                   badge: item.badge,
                   available: item.isAvailable,
+                  hasAr: item.hasAr,
+                  modelUrl: item.modelUrl,
                 }}
               />
             ))}
