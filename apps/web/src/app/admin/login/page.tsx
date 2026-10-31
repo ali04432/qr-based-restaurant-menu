@@ -13,7 +13,7 @@ export default function AdminLoginPage() {
 
   const redirectUrl = searchParams.get('redirect') || searchParams.get('returnUrl') || '/admin';
 
-  const [email, setEmail] = useState('admin@restaurant.com');
+  const [email, setEmail] = useState('admin@silverspoon.com');
   const [password, setPassword] = useState('admin123');
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.ADMIN);
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
   const handleRoleQuickSelect = (role: UserRole, defaultEmail: string) => {
     setSelectedRole(role);
     setEmail(defaultEmail);
-    setPassword(role === UserRole.ADMIN ? 'admin123' : 'password123');
+    setPassword('admin123');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,12 +83,12 @@ export default function AdminLoginPage() {
             </label>
             <div className="grid grid-cols-3 gap-1.5">
               {[
-                { role: UserRole.ADMIN, label: 'Admin', email: 'admin@restaurant.com' },
-                { role: UserRole.MANAGER, label: 'Manager', email: 'manager@restaurant.com' },
-                { role: UserRole.CHEF, label: 'Chef', email: 'chef@restaurant.com' },
-                { role: UserRole.WAITER, label: 'Waiter', email: 'waiter@restaurant.com' },
-                { role: UserRole.CASHIER, label: 'Cashier', email: 'cashier@restaurant.com' },
-                { role: UserRole.SUPER_ADMIN, label: 'Super Admin', email: 'superadmin@platform.com' },
+                { role: UserRole.ADMIN, label: 'Admin', email: 'admin@silverspoon.com' },
+                { role: UserRole.MANAGER, label: 'Manager', email: 'manager@silverspoon.com' },
+                { role: UserRole.CHEF, label: 'Chef', email: 'chef@silverspoon.com' },
+                { role: UserRole.WAITER, label: 'Waiter', email: 'waiter@silverspoon.com' },
+                { role: UserRole.CASHIER, label: 'Cashier', email: 'cashier@silverspoon.com' },
+                { role: UserRole.SUPER_ADMIN, label: 'Super Admin', email: 'superadmin@silverspoon.com' },
               ].map((item) => (
                 <button
                   key={item.role}
