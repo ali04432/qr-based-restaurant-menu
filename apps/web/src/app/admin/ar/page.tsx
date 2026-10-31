@@ -1012,6 +1012,7 @@ export default function AdminArPage() {
                   heightCm={previewAsset.heightCm}
                   depthCm={previewAsset.depthCm}
                   portionLabel={previewAsset.portionLabel}
+                  defaultMode="3d"
                 />
               </div>
 

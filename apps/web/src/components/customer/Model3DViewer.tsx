@@ -19,16 +19,96 @@ import {
 } from 'lucide-react';
 
 // ============================================================
-// Model3DViewer — Production AR/3D Component (Phase 3)
+// Model3DViewer — Production AR/3D Component (Phase 3 & 4)
 // Features:
 // 1. "View in 3D (360°)" interactive 3D rotation & zoom
 // 2. "View on My Table (AR)" WebXR & iOS QuickLook launcher
 // 3. Prominent "Sample model – not the actual dish" disclaimer
 // 4. Desktop/Unsupported device QR modal for mobile AR scanning
 // 5. Loading, Error, and Permission-denied recovery states
+// 6. Independent multi-model support across different food items
+// 7. Robust lifecycle, timeout guards, and genuine retry handling
 // ============================================================
 
-let modelViewerLoaded = false;
+// Track the model-viewer import state at module level so multiple
+// component instances coordinate rather than racing.
+// 'idle' = never attempted, 'loading' = in progress,
+// 'ready' = custom element defined, 'error' = import failed.
+let mvImportState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+// Promise shared across all instances so late-mounters can await it.
+let mvImportPromise: Promise<void> | null = null;
+
+/**
+ * Safely checks if <model-viewer> is registered in the custom elements registry.
+ * SSR-safe: returns false if window or customElements is undefined.
+ */
+function isModelViewerDefined(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof customElements !== 'undefined' &&
+    Boolean(customElements.get('model-viewer'))
+  );
+}
+
+/**
+ * Loads the @google/model-viewer custom element safely exactly once.
+ * Returns a promise that resolves when <model-viewer> is defined
+ * in the custom elements registry, or rejects on failure.
+ * Safe to call from multiple component instances and React strict-mode
+ * double-mounts — only the first call triggers the actual import.
+ */
+function ensureModelViewerLoaded(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+
+  // Already registered in the browser registry
+  if (isModelViewerDefined()) {
+    mvImportState = 'ready';
+    return Promise.resolve();
+  }
+
+  // If a previous attempt failed, allow retrying
+  if (mvImportState === 'error') {
+    mvImportState = 'idle';
+    mvImportPromise = null;
+  }
+
+  if (mvImportState === 'ready') {
+    return Promise.resolve();
+  }
+
+  if (mvImportState === 'loading' && mvImportPromise) {
+    return mvImportPromise;
+  }
+
+  mvImportState = 'loading';
+  mvImportPromise = (async () => {
+    try {
+      await import('@google/model-viewer');
+
+      if (typeof customElements !== 'undefined' && !customElements.get('model-viewer')) {
+        // Wait for custom element definition with a 10s safety timeout to prevent deadlocks
+        await Promise.race([
+          customElements.whenDefined('model-viewer'),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout waiting for <model-viewer> custom element definition')), 10000)
+          ),
+        ]);
+      }
+
+      mvImportState = 'ready';
+      console.info('[Model3DViewer] <model-viewer> custom element ready');
+    } catch (err) {
+      mvImportState = 'error';
+      mvImportPromise = null;
+      console.error('[Model3DViewer] Failed to load @google/model-viewer:', err);
+      throw err;
+    }
+  })();
+
+  return mvImportPromise;
+}
 
 interface Model3DViewerProps {
   modelUrl: string;
@@ -44,6 +124,7 @@ interface Model3DViewerProps {
   isSample?: boolean;
   onEvent?: (eventType: string) => void;
   compact?: boolean;
+  defaultMode?: 'preview' | '3d';
 }
 
 function detectPlatform() {
@@ -83,12 +164,21 @@ export default function Model3DViewer({
   isSample = false,
   onEvent,
   compact = false,
+  defaultMode = 'preview',
 }: Model3DViewerProps) {
-  const modelViewerRef = useRef<HTMLElement & { canActivateAR?: boolean; activateAR?: () => void }>(null);
-  const [mvLoaded, setMvLoaded] = useState(false);
+  const modelViewerRef = useRef<(HTMLElement & { canActivateAR?: boolean; activateAR?: () => void; loaded?: boolean; modelIsVisible?: boolean; dismissPoster?: () => void }) | null>(null);
+  const cleanupListenersRef = useRef<(() => void) | null>(null);
+
+  // Stable references for props/callbacks so event listeners don't churn on parent re-renders
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+  const modelUrlRef = useRef(modelUrl);
+  modelUrlRef.current = modelUrl;
+
+  const [mvLoaded, setMvLoaded] = useState(() => isModelViewerDefined());
   const [modelReady, setModelReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [viewMode, setViewMode] = useState<'preview' | '3d'>('preview');
+  const [viewMode, setViewMode] = useState<'preview' | '3d'>(defaultMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDims, setShowDims] = useState(false);
   const [arAvailable, setArAvailable] = useState(false);
@@ -98,6 +188,8 @@ export default function Model3DViewer({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [qrEncodedUrl, setQrEncodedUrl] = useState<string>('');
   const [permissionError, setPermissionError] = useState(false);
+  // Counter incremented on retry to force clean re-mount and cache bypass
+  const [retryKey, setRetryKey] = useState(0);
 
   // Check if model should be flagged as sample
   const isSampleModel =
@@ -109,23 +201,36 @@ export default function Model3DViewer({
   const hasDims = Boolean(widthCm || heightCm || depthCm);
   const dimStr = [widthCm, heightCm, depthCm].filter(Boolean).map(Number).join(' × ');
 
-  // Dynamic import of @google/model-viewer package on client
+  // Platform detection & Dynamic import of @google/model-viewer package on client
   useEffect(() => {
     setPlatform(detectPlatform());
     if (typeof window === 'undefined') return;
 
-    if (customElements.get('model-viewer')) {
+    if (isModelViewerDefined()) {
       setMvLoaded(true);
       return;
     }
 
-    if (modelViewerLoaded) return;
-    modelViewerLoaded = true;
+    let cancelled = false;
 
-    import('@google/model-viewer')
-      .then(() => setMvLoaded(true))
-      .catch(() => setLoadError(true));
-  }, []);
+    ensureModelViewerLoaded()
+      .then(() => {
+        if (!cancelled) {
+          setMvLoaded(true);
+          setLoadError(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[Model3DViewer] Custom element registration failed:', err);
+          setLoadError(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [retryKey]);
 
   const checkAr = useCallback(() => {
     const mv = modelViewerRef.current;
@@ -135,6 +240,114 @@ export default function Model3DViewer({
       setArStatus(can ? 'available' : 'unavailable');
     }
   }, []);
+
+  const checkArRef = useRef(checkAr);
+  checkArRef.current = checkAr;
+
+  // Callback ref attached directly to <model-viewer>.
+  // Stable function identity prevents unneeded detach/attach cycles.
+  const handleModelViewerRef = useCallback(
+    (el: (HTMLElement & { canActivateAR?: boolean; activateAR?: () => void; loaded?: boolean; modelIsVisible?: boolean; dismissPoster?: () => void }) | null) => {
+      if (cleanupListenersRef.current) {
+        cleanupListenersRef.current();
+        cleanupListenersRef.current = null;
+      }
+
+      modelViewerRef.current = el;
+
+      if (!el) return;
+
+      const currentUrl = modelUrlRef.current;
+      if (!currentUrl || !currentUrl.trim()) {
+        console.warn('[Model3DViewer] No model URL provided');
+        setModelReady(false);
+        setLoadError(true);
+        return;
+      }
+
+      let handled = false;
+
+      const onLoad = () => {
+        if (handled) return;
+        handled = true;
+        console.info('[Model3DViewer] Model loaded successfully:', currentUrl);
+        setModelReady(true);
+        setLoadError(false);
+        checkArRef.current();
+        onEventRef.current?.('ar.model.loaded');
+      };
+
+      const onError = (e: Event) => {
+        if (handled) return;
+        handled = true;
+        console.error('[Model3DViewer] Model failed to load:', currentUrl, (e as any)?.detail || e);
+        setModelReady(false);
+        setLoadError(true);
+        onEventRef.current?.('ar.model.error');
+      };
+
+      el.addEventListener('load', onLoad);
+      el.addEventListener('error', onError);
+
+      // Check if already loaded before listeners attached (e.g. cached or fast resolve)
+      if (el.loaded || el.modelIsVisible) {
+        onLoad();
+      }
+
+      // Safety polling guard: checks el.loaded periodically in case custom event was dropped
+      const interval = window.setInterval(() => {
+        if (handled) {
+          window.clearInterval(interval);
+          return;
+        }
+        if (el.loaded || el.modelIsVisible) {
+          onLoad();
+          window.clearInterval(interval);
+        }
+      }, 250);
+
+      // Timeout guard: if neither load nor error fired after 15s, transition to error state
+      // instead of remaining stuck in infinite loading spinner!
+      const timeout = window.setTimeout(() => {
+        window.clearInterval(interval);
+        if (!handled && !el.loaded && !el.modelIsVisible) {
+          console.warn('[Model3DViewer] Model load timed out after 15s:', currentUrl);
+          handled = true;
+          setModelReady(false);
+          setLoadError(true);
+          onEventRef.current?.('ar.model.timeout');
+        }
+      }, 15000);
+
+      cleanupListenersRef.current = () => {
+        handled = true;
+        window.clearInterval(interval);
+        window.clearTimeout(timeout);
+        el.removeEventListener('load', onLoad);
+        el.removeEventListener('error', onError);
+      };
+    },
+    [] // Intentionally empty: relies on refs for stable identity
+  );
+
+  // Clean up listeners on component unmount
+  useEffect(() => {
+    return () => {
+      if (cleanupListenersRef.current) {
+        cleanupListenersRef.current();
+        cleanupListenersRef.current = null;
+      }
+    };
+  }, []);
+
+  // Multi-item support: reset model-ready state, retry key, and viewMode when modelUrl changes.
+  // Each food item has its own unique GLB, so switching items re-triggers clean loading.
+  useEffect(() => {
+    setViewMode(defaultMode);
+    setModelReady(false);
+    setLoadError(false);
+    setRetryKey(0);
+  }, [modelUrl, defaultMode]);
 
   useEffect(() => {
     if (!mvLoaded) return;
@@ -146,21 +359,21 @@ export default function Model3DViewer({
   // Launch AR or open QR modal on desktop
   const handleLaunchAr = useCallback(() => {
     setPermissionError(false);
-    onEvent?.('ar.viewer.opened');
+    onEventRef.current?.('ar.viewer.opened');
 
     if (platform.isIOS && iosModelUrl) {
       const a = document.createElement('a');
       a.setAttribute('rel', 'ar');
       a.setAttribute('href', iosModelUrl);
       a.click();
-      onEvent?.('ar.quicklook.launched');
+      onEventRef.current?.('ar.quicklook.launched');
       return;
     }
 
     if (modelViewerRef.current?.canActivateAR && modelViewerRef.current?.activateAR) {
       try {
         modelViewerRef.current.activateAR();
-        onEvent?.('ar.session.started');
+        onEventRef.current?.('ar.session.started');
       } catch (err) {
         console.warn('[AR] Launch error:', err);
         setPermissionError(true);
@@ -196,25 +409,25 @@ export default function Model3DViewer({
       .then((url) => {
         setQrCodeDataUrl(url);
         setShowQrModal(true);
-        onEvent?.('ar.qr_modal.opened');
+        onEventRef.current?.('ar.qr_modal.opened');
       })
       .catch(() => {
         setShowQrModal(true);
       });
-  }, [platform, iosModelUrl, onEvent]);
+  }, [platform, iosModelUrl]);
 
-  const handleModelLoad = useCallback(() => {
-    setModelReady(true);
+  // Genuine Retry handler: resets all error states and increments retryKey to
+  // remount <model-viewer> with a cache-busting param so network fetches genuinely re-fire.
+  const handleRetry = useCallback(() => {
     setLoadError(false);
-    onEvent?.('ar.model.loaded');
-    checkAr();
-  }, [onEvent, checkAr]);
-
-  const handleModelError = useCallback(() => {
     setModelReady(false);
-    setLoadError(true);
-    onEvent?.('ar.model.error');
-  }, [onEvent]);
+    // If the module import previously failed, allow re-attempt
+    if (mvImportState === 'error') {
+      mvImportState = 'idle';
+      mvImportPromise = null;
+    }
+    setRetryKey((k) => k + 1);
+  }, []);
 
   const arButtonShown = arAvailable || (platform.isIOS && !!iosModelUrl) || !platform.isMobile;
 
@@ -238,7 +451,7 @@ export default function Model3DViewer({
     );
 
   // Core <model-viewer> renderer
-  const ModelViewerEl = ({ fullH = false }: { fullH?: boolean }) => {
+  const renderModelViewer = (fullH: boolean) => {
     const style: React.CSSProperties = {
       width: '100%',
       height: fullH ? '100%' : undefined,
@@ -247,6 +460,29 @@ export default function Model3DViewer({
       backgroundColor: '#07090e',
       display: 'block',
     };
+
+    if (!modelUrl || !modelUrl.trim()) {
+      return (
+        <div
+          style={{
+            ...style,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column',
+            gap: 12,
+            padding: 24,
+            textAlign: 'center',
+          }}
+        >
+          <AlertTriangle className="h-10 w-10 text-amber-400/80" />
+          <div className="text-sm font-semibold text-white">No 3D Model Specified</div>
+          <p className="text-xs text-slate-400 max-w-xs">
+            A 3D model asset has not been configured for this food item.
+          </p>
+        </div>
+      );
+    }
 
     if (loadError) {
       return (
@@ -268,10 +504,7 @@ export default function Model3DViewer({
             The 3D model file could not be rendered or is temporarily unreachable.
           </p>
           <button
-            onClick={() => {
-              setLoadError(false);
-              setModelReady(false);
-            }}
+            onClick={handleRetry}
             className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 transition"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -280,6 +513,12 @@ export default function Model3DViewer({
         </div>
       );
     }
+
+    // On retry > 0, append a cache-busting parameter to ensure network genuinely retries
+    const effectiveSrc =
+      retryKey > 0
+        ? `${modelUrl}${modelUrl.includes('?') ? '&' : '?'}retry=${retryKey}`
+        : modelUrl;
 
     return (
       <div className="relative w-full h-full">
@@ -304,10 +543,11 @@ export default function Model3DViewer({
 
         {mvLoaded && (
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-expect-error custom web component
+          // @ts-ignore custom web component
           <model-viewer
-            ref={modelViewerRef}
-            src={modelUrl}
+            key={`${modelUrl}-${retryKey}`}
+            ref={handleModelViewerRef}
+            src={effectiveSrc}
             ios-src={iosModelUrl || undefined}
             alt={`3D model of ${name}`}
             camera-controls
@@ -320,10 +560,10 @@ export default function Model3DViewer({
             shadow-softness="0.8"
             exposure="1.0"
             tone-mapping="commerce"
+            loading="eager"
+            reveal="auto"
             style={style}
             scale={`${scale} ${scale} ${scale}`}
-            onLoad={handleModelLoad}
-            onError={handleModelError}
           />
         )}
       </div>
@@ -336,7 +576,7 @@ export default function Model3DViewer({
       <button
         onClick={() => {
           setViewMode('3d');
-          onEvent?.('view3d.opened');
+          onEventRef.current?.('view3d.opened');
         }}
         aria-label={`View ${name} in 3D`}
         className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--accent-gold)] transition hover:bg-[var(--accent-gold)]/20"
@@ -381,7 +621,7 @@ export default function Model3DViewer({
           </div>
         </div>
         <div className="relative flex-1">
-          <ModelViewerEl fullH />
+          {renderModelViewer(true)}
           <SampleBadge />
           {hasDims && <DimBadge />}
         </div>
@@ -416,7 +656,7 @@ export default function Model3DViewer({
             <button
               onClick={() => {
                 setViewMode('3d');
-                onEvent?.('view3d.opened');
+                onEventRef.current?.('view3d.opened');
               }}
               aria-label={`View ${name} in 3D (360°)`}
               className="inline-flex items-center gap-2 rounded-xl border border-amber-400/40 bg-slate-950/80 px-3.5 py-2.5 text-xs font-bold text-amber-400 backdrop-blur-md shadow-lg transition hover:bg-amber-500/20 hover:border-amber-400"
@@ -441,7 +681,7 @@ export default function Model3DViewer({
       {viewMode === '3d' && (
         <div className="relative">
           <div className="relative bg-[#07090e]">
-            <ModelViewerEl />
+            {renderModelViewer(false)}
 
             {/* Sample Badge */}
             <SampleBadge />

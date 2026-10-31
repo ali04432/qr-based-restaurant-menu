@@ -54,6 +54,7 @@ export default function FoodDetailsPage() {
 
     setLoading(true);
     setError(null);
+    setArAsset(null);
 
     try {
       const fetched = await menuService.getMenuItem(itemId);
@@ -227,11 +228,11 @@ export default function FoodDetailsPage() {
           name: item.name,
           modelUrl: item.modelUrl,
           previewImage: item.image,
-          widthCm: 20,
-          heightCm: 8,
-          depthCm: 20,
-          portionLabel: 'Sample – avocado placeholder',
-          scale: 1,
+          widthCm: (item as any).widthCm ?? 20,
+          heightCm: (item as any).heightCm ?? 8,
+          depthCm: (item as any).depthCm ?? 20,
+          portionLabel: (item as any).portionLabel ?? (item.modelUrl.includes('avocado.glb') ? 'Sample – avocado placeholder' : null),
+          scale: (item as any).scale ?? 1,
           status: 'ACTIVE',
         }
       : null);

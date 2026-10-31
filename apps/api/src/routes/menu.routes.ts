@@ -71,7 +71,23 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         where: { restaurantId: restaurant.id, isAvailable: true },
         include: {
           category: { select: { id: true, name: true } },
-          arAsset: { select: { id: true, modelUrl: true, status: true } },
+          arAsset: {
+            select: {
+              id: true,
+              name: true,
+              assetType: true,
+              modelUrl: true,
+              iosModelUrl: true,
+              previewImage: true,
+              mimeType: true,
+              scale: true,
+              widthCm: true,
+              heightCm: true,
+              depthCm: true,
+              portionLabel: true,
+              status: true,
+            },
+          },
         },
         orderBy: { name: 'asc' },
       }),
@@ -97,6 +113,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         imageUrl: item.image,
         modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
         hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
+        arAsset: item.arAsset?.status === 'ACTIVE' ? item.arAsset : null,
         category: catName,
         isAvailable: item.isAvailable,
       });
@@ -169,7 +186,23 @@ router.get('/items', async (req: Request, res: Response, next: NextFunction) => 
       },
       include: {
         category: { select: { id: true, name: true } },
-        arAsset: { select: { id: true, modelUrl: true, status: true } },
+        arAsset: {
+          select: {
+            id: true,
+            name: true,
+            assetType: true,
+            modelUrl: true,
+            iosModelUrl: true,
+            previewImage: true,
+            mimeType: true,
+            scale: true,
+            widthCm: true,
+            heightCm: true,
+            depthCm: true,
+            portionLabel: true,
+            status: true,
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
@@ -180,6 +213,7 @@ router.get('/items', async (req: Request, res: Response, next: NextFunction) => 
       imageUrl: item.image,
       modelUrl: item.arAsset?.status === 'ACTIVE' ? item.arAsset.modelUrl : null,
       hasAr: !!(item.arAsset && item.arAsset.status === 'ACTIVE'),
+      arAsset: item.arAsset?.status === 'ACTIVE' ? item.arAsset : null,
     }));
     return sendSuccess(res, mapped);
   } catch (err) {
