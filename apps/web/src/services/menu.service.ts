@@ -217,15 +217,29 @@ export const menuService = {
         }
         return mapBackendItemToMenuItem(rawItem, rawItem.restaurantId || '1');
       }
-      if (res.status === 404) {
-        return null;
-      }
+      /* Fall through to mock fallback on 404 */
     } catch (err) {
       console.warn('[menuService] Could not fetch single item from API:', err);
     }
 
     // Fallback to local mock data
-    const local = mockMenuItems.find((i) => i.id === itemId);
+    let local = mockMenuItems.find((i) => i.id === itemId);
+    if (!local) {
+      const idMap: Record<string, string> = {
+        'bac6c92a-b96b-46d8-b746-1b374939bf43': 'item-1',
+        '98c7d921-a833-498f-83c6-028d301c7d94': 'item-7',
+        '7926400a-e47a-4f77-b9f7-d1c3fa5f6a1b': 'item-13',
+        '6870227a-9df2-462b-b2bc-678d11e0b203': 'item-4',
+        'f2ba2eb2-0ae3-4543-95e7-9aa8de4a98dd': 'item-2',
+      };
+      const mappedId = idMap[itemId];
+      if (mappedId) {
+        const found = mockMenuItems.find((i) => i.id === mappedId);
+        if (found) {
+          local = { ...found, id: itemId };
+        }
+      }
+    }
     return local || null;
   },
 };

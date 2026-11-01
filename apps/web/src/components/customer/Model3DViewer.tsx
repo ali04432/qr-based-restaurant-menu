@@ -16,18 +16,25 @@ import {
   RefreshCw,
   QrCode,
   ShieldAlert,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 
 // ============================================================
 // Model3DViewer — Production AR/3D Component (Phase 3 & 4)
 // Features:
 // 1. "View in 3D (360°)" interactive 3D rotation & zoom
-// 2. "View on My Table (AR)" WebXR & iOS QuickLook launcher
-// 3. Prominent "Sample model – not the actual dish" disclaimer
-// 4. Desktop/Unsupported device QR modal for mobile AR scanning
-// 5. Loading, Error, and Permission-denied recovery states
-// 6. Independent multi-model support across different food items
-// 7. Robust lifecycle, timeout guards, and genuine retry handling
+// 2. Slow auto-turntable rotation on load
+// 3. Mouse-drag and mobile touch-based 3D rotation
+// 4. Smooth zoom in / zoom out controls and scroll/pinch zoom
+// 5. Reset camera/view control
+// 6. "View on My Table (AR)" WebXR & iOS QuickLook launcher
+// 7. Prominent "Sample model – not the actual dish" disclaimer for test models
+// 8. Desktop/Unsupported device QR modal for mobile AR scanning
+// 9. Loading, Error, and Permission-denied recovery states
+// 10. Independent multi-model support across different food items
+// 11. Robust lifecycle, timeout guards, and genuine retry handling
+// 12. Premium Silver Spoon dark luxury theme with gold accents
 // ============================================================
 
 // Track the model-viewer import state at module level so multiple
@@ -143,7 +150,7 @@ const ctrlBtn: React.CSSProperties = {
   justifyContent: 'center',
   borderRadius: 10,
   border: '1px solid rgba(255,255,255,0.18)',
-  background: 'rgba(0,0,0,0.68)',
+  background: 'rgba(0,0,0,0.72)',
   backdropFilter: 'blur(10px)',
   color: '#fff',
   cursor: 'pointer',
@@ -166,7 +173,18 @@ export default function Model3DViewer({
   compact = false,
   defaultMode = 'preview',
 }: Model3DViewerProps) {
-  const modelViewerRef = useRef<(HTMLElement & { canActivateAR?: boolean; activateAR?: () => void; loaded?: boolean; modelIsVisible?: boolean; dismissPoster?: () => void }) | null>(null);
+  const modelViewerRef = useRef<(HTMLElement & {
+    canActivateAR?: boolean;
+    activateAR?: () => void;
+    loaded?: boolean;
+    modelIsVisible?: boolean;
+    dismissPoster?: () => void;
+    cameraOrbit?: string;
+    cameraTarget?: string;
+    fieldOfView?: string;
+    jumpCameraToGoal?: () => void;
+    zoom?: (keyPresses: number) => void;
+  }) | null>(null);
   const cleanupListenersRef = useRef<(() => void) | null>(null);
 
   // Stable references for props/callbacks so event listeners don't churn on parent re-renders
@@ -191,7 +209,7 @@ export default function Model3DViewer({
   // Counter incremented on retry to force clean re-mount and cache bypass
   const [retryKey, setRetryKey] = useState(0);
 
-  // Check if model should be flagged as sample
+  // Check if model should be flagged as sample (e.g. avocado placeholder)
   const isSampleModel =
     isSample ||
     modelUrl?.includes('avocado.glb') ||
@@ -244,10 +262,46 @@ export default function Model3DViewer({
   const checkArRef = useRef(checkAr);
   checkArRef.current = checkAr;
 
+  // Camera view controls: Reset view, Zoom in, Zoom out
+  const handleResetView = useCallback(() => {
+    const mv = modelViewerRef.current;
+    if (mv) {
+      mv.cameraOrbit = '0deg 75deg 105%';
+      mv.cameraTarget = 'auto auto auto';
+      mv.fieldOfView = 'auto';
+      mv.jumpCameraToGoal?.();
+    }
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    const mv = modelViewerRef.current;
+    if (mv?.zoom) {
+      mv.zoom(1);
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    const mv = modelViewerRef.current;
+    if (mv?.zoom) {
+      mv.zoom(-1);
+    }
+  }, []);
+
   // Callback ref attached directly to <model-viewer>.
   // Stable function identity prevents unneeded detach/attach cycles.
   const handleModelViewerRef = useCallback(
-    (el: (HTMLElement & { canActivateAR?: boolean; activateAR?: () => void; loaded?: boolean; modelIsVisible?: boolean; dismissPoster?: () => void }) | null) => {
+    (el: (HTMLElement & {
+      canActivateAR?: boolean;
+      activateAR?: () => void;
+      loaded?: boolean;
+      modelIsVisible?: boolean;
+      dismissPoster?: () => void;
+      cameraOrbit?: string;
+      cameraTarget?: string;
+      fieldOfView?: string;
+      jumpCameraToGoal?: () => void;
+      zoom?: (keyPresses: number) => void;
+    }) | null) => {
       if (cleanupListenersRef.current) {
         cleanupListenersRef.current();
         cleanupListenersRef.current = null;
@@ -382,8 +436,6 @@ export default function Model3DViewer({
     }
 
     // Fallback for desktop or unsupported phone browser: generate phone QR code.
-    // Encodes the public HTTPS tunnel URL if configured (e.g. NEXT_PUBLIC_TUNNEL_URL),
-    // otherwise preserves the current window URL with query parameters.
     let targetUrl = '';
     if (typeof window !== 'undefined') {
       const pathnameAndSearch = window.location.pathname + window.location.search + window.location.hash;
@@ -421,7 +473,6 @@ export default function Model3DViewer({
   const handleRetry = useCallback(() => {
     setLoadError(false);
     setModelReady(false);
-    // If the module import previously failed, allow re-attempt
     if (mvImportState === 'error') {
       mvImportState = 'idle';
       mvImportPromise = null;
@@ -549,17 +600,25 @@ export default function Model3DViewer({
             ref={handleModelViewerRef}
             src={effectiveSrc}
             ios-src={iosModelUrl || undefined}
-            alt={`3D model of ${name}`}
+            alt={`3D realistic model of ${name}`}
             camera-controls
             auto-rotate
+            rotation-per-second="25deg"
+            auto-rotate-delay="0"
+            touch-action="pan-y"
+            interpolation-decay="150"
+            min-camera-orbit="auto auto 50%"
+            max-camera-orbit="auto auto 220%"
+            camera-orbit="0deg 75deg 105%"
+            environment-image="neutral"
+            shadow-intensity="1.5"
+            shadow-softness="0.75"
+            exposure="1.05"
+            tone-mapping="commerce"
             ar
             ar-modes="webxr scene-viewer quick-look"
             ar-scale={fixedArScale ? 'fixed' : 'auto'}
             xr-environment
-            shadow-intensity="1"
-            shadow-softness="0.8"
-            exposure="1.0"
-            tone-mapping="commerce"
             loading="eager"
             reveal="auto"
             style={style}
@@ -602,6 +661,30 @@ export default function Model3DViewer({
             {hasDims && <span className="text-xs text-amber-400 font-mono">{dimStr} cm</span>}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetView}
+              title="Reset camera view"
+              aria-label="Reset camera view"
+              style={ctrlBtn}
+            >
+              <RotateCcw size={16} />
+            </button>
+            <button
+              onClick={handleZoomIn}
+              title="Zoom in"
+              aria-label="Zoom in"
+              style={ctrlBtn}
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              onClick={handleZoomOut}
+              title="Zoom out"
+              aria-label="Zoom out"
+              style={ctrlBtn}
+            >
+              <ZoomOut size={16} />
+            </button>
             {arButtonShown && (
               <button
                 onClick={handleLaunchAr}
@@ -689,6 +772,30 @@ export default function Model3DViewer({
             {/* Top-right overlay controls */}
             <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
               <button
+                onClick={handleResetView}
+                title="Reset view (camera & zoom)"
+                aria-label="Reset 3D view"
+                style={ctrlBtn}
+              >
+                <RotateCcw size={16} />
+              </button>
+              <button
+                onClick={handleZoomIn}
+                title="Zoom in"
+                aria-label="Zoom in"
+                style={ctrlBtn}
+              >
+                <ZoomIn size={16} />
+              </button>
+              <button
+                onClick={handleZoomOut}
+                title="Zoom out"
+                aria-label="Zoom out"
+                style={ctrlBtn}
+              >
+                <ZoomOut size={16} />
+              </button>
+              <button
                 onClick={() => setViewMode('preview')}
                 title="Switch back to photo"
                 aria-label="Back to image"
@@ -730,7 +837,7 @@ export default function Model3DViewer({
                 {portionLabel && <div className="text-xs text-slate-300 mt-1">{portionLabel}</div>}
                 <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1.5">
                   <RotateCcw className="h-3 w-3" />
-                  <span>Drag to rotate 360° • Pinch to zoom</span>
+                  <span>Drag to rotate 360° • Pinch / Scroll to zoom</span>
                 </div>
               </div>
             )}
@@ -764,7 +871,7 @@ export default function Model3DViewer({
                 <>
                   <Smartphone className="h-4 w-4 text-amber-400" />
                   <span className="text-slate-400">
-                    Interact in 3D above, or tap "View on My Table" to scan on your phone
+                    Drag to rotate 360° • Scroll / Pinch to zoom • Tap "View on My Table" for AR
                   </span>
                 </>
               )}

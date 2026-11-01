@@ -270,6 +270,7 @@ export default function FoodDetailsPage() {
                   portionLabel={activeAr.portionLabel}
                   isSample={Boolean(activeAr.name?.toLowerCase().includes('sample') || activeAr.modelUrl?.includes('avocado.glb') || activeAr.portionLabel?.toLowerCase().includes('sample'))}
                   onEvent={handleArEvent}
+                  defaultMode="3d"
                 />
                 {/* Favorite button overlaid */}
                 <button
