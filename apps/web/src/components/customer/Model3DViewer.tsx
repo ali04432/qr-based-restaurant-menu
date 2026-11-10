@@ -18,36 +18,37 @@ import {
   ShieldAlert,
   ZoomIn,
   ZoomOut,
+  Scan,
+  Layers,
+  HelpCircle,
+  ChevronDown,
 } from 'lucide-react';
 
+import {
+  detectArCapabilities,
+  ArResolution,
+  ArMode,
+  getPlatformDetails,
+} from '../../utils/arDetection';
+import MarkerArModal from './MarkerArModal';
+import HiroMarkerModal from './HiroMarkerModal';
+
 // ============================================================
-// Model3DViewer — Production AR/3D Component (Phase 3 & 4)
-// Features:
-// 1. "View in 3D (360°)" interactive 3D rotation & zoom
-// 2. Slow auto-turntable rotation on load
-// 3. Mouse-drag and mobile touch-based 3D rotation
-// 4. Smooth zoom in / zoom out controls and scroll/pinch zoom
-// 5. Reset camera/view control
-// 6. "View on My Table (AR)" WebXR & iOS QuickLook launcher
-// 7. Prominent "Sample model – not the actual dish" disclaimer for test models
-// 8. Desktop/Unsupported device QR modal for mobile AR scanning
-// 9. Loading, Error, and Permission-denied recovery states
-// 10. Independent multi-model support across different food items
-// 11. Robust lifecycle, timeout guards, and genuine retry handling
-// 12. Premium Silver Spoon dark luxury theme with gold accents
+// Model3DViewer — Production Cross-Platform AR/3D Component
+// Priority AR Engine:
+// 1. Android Google Scene Viewer / WebXR
+// 2. Apple Quick Look (USDZ)
+// 3. Marker-based WebAR (AR.js Hiro pattern)
+// 4. Interactive 360° 3D Viewer Fallback
 // ============================================================
 
 // Track the model-viewer import state at module level so multiple
 // component instances coordinate rather than racing.
-// 'idle' = never attempted, 'loading' = in progress,
-// 'ready' = custom element defined, 'error' = import failed.
 let mvImportState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
-// Promise shared across all instances so late-mounters can await it.
 let mvImportPromise: Promise<void> | null = null;
 
 /**
  * Safely checks if <model-viewer> is registered in the custom elements registry.
- * SSR-safe: returns false if window or customElements is undefined.
  */
 function isModelViewerDefined(): boolean {
   return (
@@ -59,23 +60,17 @@ function isModelViewerDefined(): boolean {
 
 /**
  * Loads the @google/model-viewer custom element safely exactly once.
- * Returns a promise that resolves when <model-viewer> is defined
- * in the custom elements registry, or rejects on failure.
- * Safe to call from multiple component instances and React strict-mode
- * double-mounts — only the first call triggers the actual import.
  */
 function ensureModelViewerLoaded(): Promise<void> {
   if (typeof window === 'undefined') {
     return Promise.resolve();
   }
 
-  // Already registered in the browser registry
   if (isModelViewerDefined()) {
     mvImportState = 'ready';
     return Promise.resolve();
   }
 
-  // If a previous attempt failed, allow retrying
   if (mvImportState === 'error') {
     mvImportState = 'idle';
     mvImportPromise = null;
@@ -95,7 +90,6 @@ function ensureModelViewerLoaded(): Promise<void> {
       await import('@google/model-viewer');
 
       if (typeof customElements !== 'undefined' && !customElements.get('model-viewer')) {
-        // Wait for custom element definition with a 10s safety timeout to prevent deadlocks
         await Promise.race([
           customElements.whenDefined('model-viewer'),
           new Promise((_, reject) =>
@@ -132,14 +126,6 @@ interface Model3DViewerProps {
   onEvent?: (eventType: string) => void;
   compact?: boolean;
   defaultMode?: 'preview' | '3d';
-}
-
-function detectPlatform() {
-  if (typeof navigator === 'undefined') return { isIOS: false, isAndroid: false, isMobile: false };
-  const ua = navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/.test(ua);
-  return { isIOS, isAndroid, isMobile: isIOS || isAndroid };
 }
 
 const ctrlBtn: React.CSSProperties = {
@@ -187,7 +173,7 @@ export default function Model3DViewer({
   }) | null>(null);
   const cleanupListenersRef = useRef<(() => void) | null>(null);
 
-  // Stable references for props/callbacks so event listeners don't churn on parent re-renders
+  // Stable references for props/callbacks
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
   const modelUrlRef = useRef(modelUrl);
@@ -201,15 +187,20 @@ export default function Model3DViewer({
   const [showDims, setShowDims] = useState(false);
   const [arAvailable, setArAvailable] = useState(false);
   const [arStatus, setArStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
-  const [platform, setPlatform] = useState({ isIOS: false, isAndroid: false, isMobile: false });
+  const [platform, setPlatform] = useState(() => getPlatformDetails());
+  const [arResolution, setArResolution] = useState<ArResolution | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [qrEncodedUrl, setQrEncodedUrl] = useState<string>('');
   const [permissionError, setPermissionError] = useState(false);
-  // Counter incremented on retry to force clean re-mount and cache bypass
   const [retryKey, setRetryKey] = useState(0);
 
-  // Check if model should be flagged as sample (e.g. avocado placeholder)
+  // Cross-platform Marker AR states
+  const [isMarkerArOpen, setIsMarkerArOpen] = useState(false);
+  const [showHiroGuide, setShowHiroGuide] = useState(false);
+  const [showArMenu, setShowArMenu] = useState(false);
+
+  // Sample model verification
   const isSampleModel =
     isSample ||
     modelUrl?.includes('avocado.glb') ||
@@ -219,9 +210,17 @@ export default function Model3DViewer({
   const hasDims = Boolean(widthCm || heightCm || depthCm);
   const dimStr = [widthCm, heightCm, depthCm].filter(Boolean).map(Number).join(' × ');
 
-  // Platform detection & Dynamic import of @google/model-viewer package on client
+  // Platform and Capability Detection
   useEffect(() => {
-    setPlatform(detectPlatform());
+    setPlatform(getPlatformDetails());
+    detectArCapabilities({ modelUrl, iosModelUrl }).then((res) => {
+      setArResolution(res);
+      if (res.availableModes.some((m) => m === 'scene-viewer' || m === 'quick-look' || m === 'marker-webar')) {
+        setArAvailable(true);
+        setArStatus('available');
+      }
+    });
+
     if (typeof window === 'undefined') return;
 
     if (isModelViewerDefined()) {
@@ -248,14 +247,16 @@ export default function Model3DViewer({
     return () => {
       cancelled = true;
     };
-  }, [retryKey]);
+  }, [retryKey, modelUrl, iosModelUrl]);
 
   const checkAr = useCallback(() => {
     const mv = modelViewerRef.current;
     if (mv && typeof mv.canActivateAR !== 'undefined') {
       const can = !!mv.canActivateAR;
-      setArAvailable(can);
-      setArStatus(can ? 'available' : 'unavailable');
+      if (can) {
+        setArAvailable(true);
+        setArStatus('available');
+      }
     }
   }, []);
 
@@ -287,8 +288,7 @@ export default function Model3DViewer({
     }
   }, []);
 
-  // Callback ref attached directly to <model-viewer>.
-  // Stable function identity prevents unneeded detach/attach cycles.
+  // Stable callback ref attached directly to <model-viewer>
   const handleModelViewerRef = useCallback(
     (el: (HTMLElement & {
       canActivateAR?: boolean;
@@ -343,12 +343,10 @@ export default function Model3DViewer({
       el.addEventListener('load', onLoad);
       el.addEventListener('error', onError);
 
-      // Check if already loaded before listeners attached (e.g. cached or fast resolve)
       if (el.loaded || el.modelIsVisible) {
         onLoad();
       }
 
-      // Safety polling guard: checks el.loaded periodically in case custom event was dropped
       const interval = window.setInterval(() => {
         if (handled) {
           window.clearInterval(interval);
@@ -360,8 +358,6 @@ export default function Model3DViewer({
         }
       }, 250);
 
-      // Timeout guard: if neither load nor error fired after 15s, transition to error state
-      // instead of remaining stuck in infinite loading spinner!
       const timeout = window.setTimeout(() => {
         window.clearInterval(interval);
         if (!handled && !el.loaded && !el.modelIsVisible) {
@@ -381,10 +377,9 @@ export default function Model3DViewer({
         el.removeEventListener('error', onError);
       };
     },
-    [] // Intentionally empty: relies on refs for stable identity
+    []
   );
 
-  // Clean up listeners on component unmount
   useEffect(() => {
     return () => {
       if (cleanupListenersRef.current) {
@@ -394,8 +389,6 @@ export default function Model3DViewer({
     };
   }, []);
 
-  // Multi-item support: reset model-ready state, retry key, and viewMode when modelUrl changes.
-  // Each food item has its own unique GLB, so switching items re-triggers clean loading.
   useEffect(() => {
     setViewMode(defaultMode);
     setModelReady(false);
@@ -410,37 +403,8 @@ export default function Model3DViewer({
     return () => clearTimeout(t);
   }, [mvLoaded, viewMode, checkAr]);
 
-  // Launch AR or open QR modal on desktop
-  const handleLaunchAr = useCallback(() => {
-    setPermissionError(false);
-    onEventRef.current?.('ar.viewer.opened');
-
-    if (platform.isIOS && iosModelUrl) {
-      const a = document.createElement('a');
-      a.setAttribute('rel', 'ar');
-      a.setAttribute('href', iosModelUrl);
-      const img = document.createElement('img');
-      img.alt = name;
-      a.appendChild(img);
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      onEventRef.current?.('ar.quicklook.launched');
-      return;
-    }
-
-    if (modelViewerRef.current?.canActivateAR && modelViewerRef.current?.activateAR) {
-      try {
-        modelViewerRef.current.activateAR();
-        onEventRef.current?.('ar.session.started');
-      } catch (err) {
-        console.warn('[AR] Launch error:', err);
-        setPermissionError(true);
-      }
-      return;
-    }
-
-    // Fallback for desktop or unsupported phone browser: generate phone QR code.
+  // Generate mobile QR Code for desktop or cross-device scanning
+  const generateAndShowQrModal = useCallback(() => {
     let targetUrl = '';
     if (typeof window !== 'undefined') {
       const pathnameAndSearch = window.location.pathname + window.location.search + window.location.hash;
@@ -471,10 +435,74 @@ export default function Model3DViewer({
       .catch(() => {
         setShowQrModal(true);
       });
-  }, [platform, iosModelUrl]);
+  }, []);
 
-  // Genuine Retry handler: resets all error states and increments retryKey to
-  // remount <model-viewer> with a cache-busting param so network fetches genuinely re-fire.
+  // Priority Cross-Platform AR Dispatcher:
+  // 1. Android Scene Viewer / WebXR
+  // 2. Apple Quick Look (USDZ)
+  // 3. Marker-Based WebAR
+  // 4. Desktop Mobile QR Modal
+  const handleLaunchAr = useCallback((explicitMode?: ArMode) => {
+    setPermissionError(false);
+    setShowArMenu(false);
+    onEventRef.current?.('ar.viewer.opened');
+
+    // If explicit Marker AR requested:
+    if (explicitMode === 'marker-webar') {
+      setIsMarkerArOpen(true);
+      onEventRef.current?.('ar.marker.launched');
+      return;
+    }
+
+    // iOS Quick Look:
+    if ((explicitMode === 'quick-look' || (!explicitMode && platform.isIOS)) && iosModelUrl) {
+      const a = document.createElement('a');
+      a.setAttribute('rel', 'ar');
+      a.setAttribute('href', iosModelUrl);
+      const img = document.createElement('img');
+      img.alt = name;
+      a.appendChild(img);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      onEventRef.current?.('ar.quicklook.launched');
+      return;
+    }
+
+    // Android Scene Viewer / WebXR via model-viewer:
+    if (
+      (explicitMode === 'scene-viewer' || (!explicitMode && platform.isAndroid)) &&
+      modelViewerRef.current?.canActivateAR &&
+      modelViewerRef.current?.activateAR
+    ) {
+      try {
+        modelViewerRef.current.activateAR();
+        onEventRef.current?.('ar.session.started');
+        return;
+      } catch (err) {
+        console.warn('[Model3DViewer] Native AR launch error:', err);
+        // Fallback to Marker AR if native activation fails
+        if (arResolution?.capabilities.markerAr) {
+          setIsMarkerArOpen(true);
+          return;
+        }
+        setPermissionError(true);
+        return;
+      }
+    }
+
+    // Fallback for mobile browsers without native AR (or Firefox / other engines):
+    if (platform.isMobile && arResolution?.capabilities.markerAr) {
+      setIsMarkerArOpen(true);
+      onEventRef.current?.('ar.marker.launched');
+      return;
+    }
+
+    // Desktop or non-mobile environment: show QR code modal
+    generateAndShowQrModal();
+  }, [platform, iosModelUrl, name, arResolution, generateAndShowQrModal]);
+
+  // Genuine Retry handler
   const handleRetry = useCallback(() => {
     setLoadError(false);
     setModelReady(false);
@@ -487,7 +515,7 @@ export default function Model3DViewer({
 
   const arButtonShown = arAvailable || (platform.isIOS && !!iosModelUrl) || !platform.isMobile;
 
-  // Sample Model Badge component
+  // Sample Model Badge
   const SampleBadge = () =>
     !isSampleModel ? null : (
       <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md shadow-sm">
@@ -496,7 +524,7 @@ export default function Model3DViewer({
       </div>
     );
 
-  // Real Dimensions Badge
+  // Dish Dimensions Badge
   const DimBadge = () =>
     !hasDims ? null : (
       <div className="absolute bottom-3 left-3 z-20 rounded-xl border border-amber-500/30 bg-black/75 px-3 py-2 text-xs font-semibold text-amber-400 backdrop-blur-md shadow-md">
@@ -570,7 +598,6 @@ export default function Model3DViewer({
       );
     }
 
-    // On retry > 0, append a cache-busting parameter to ensure network genuinely retries
     const effectiveSrc =
       retryKey > 0
         ? `${modelUrl}${modelUrl.includes('?') ? '&' : '?'}retry=${retryKey}`
@@ -693,7 +720,7 @@ export default function Model3DViewer({
             </button>
             {arButtonShown && (
               <button
-                onClick={handleLaunchAr}
+                onClick={() => handleLaunchAr()}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3.5 py-2 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/25"
               >
                 <Camera className="h-4 w-4" />
@@ -740,7 +767,7 @@ export default function Model3DViewer({
           {/* Real dimensions badge */}
           {hasDims && <DimBadge />}
 
-          {/* Action Button Bar: "View in 3D (360°)" and "View on My Table (AR)" */}
+          {/* Action Button Bar */}
           <div className="absolute bottom-3 right-3 z-20 flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
@@ -754,14 +781,67 @@ export default function Model3DViewer({
               <span>View in 3D (360°)</span>
             </button>
 
-            <button
-              onClick={handleLaunchAr}
-              aria-label={`View ${name} on My Table in Augmented Reality`}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-lg transition hover:bg-emerald-500/30 hover:border-emerald-400"
-            >
-              <Camera className="h-4 w-4" />
-              <span>View on My Table (AR)</span>
-            </button>
+            {/* View on My Table (AR) Button with Options */}
+            <div className="relative inline-flex items-center">
+              <button
+                onClick={() => handleLaunchAr()}
+                aria-label={`View ${name} on My Table in Augmented Reality`}
+                className="inline-flex items-center gap-2 rounded-l-xl border border-emerald-500/50 bg-emerald-500/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-lg transition hover:bg-emerald-500/30 hover:border-emerald-400"
+              >
+                <Camera className="h-4 w-4" />
+                <span>View on My Table (AR)</span>
+              </button>
+              <button
+                onClick={() => setShowArMenu((v) => !v)}
+                aria-label="AR Modes options"
+                title="Select AR Mode"
+                className="inline-flex items-center justify-center rounded-r-xl border border-l-0 border-emerald-500/50 bg-emerald-500/20 px-2 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-lg transition hover:bg-emerald-500/30"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+
+              {/* AR Modes Dropdown */}
+              {showArMenu && (
+                <div className="absolute bottom-full right-0 mb-2 w-64 rounded-2xl border border-slate-700 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-md z-30">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Choose AR Experience
+                  </div>
+                  <button
+                    onClick={() => handleLaunchAr(platform.isIOS ? 'quick-look' : 'scene-viewer')}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <Camera className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <div>
+                      <div>Surface AR (Real Table)</div>
+                      <div className="text-[10px] text-slate-400">Scene Viewer / Apple Quick Look</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleLaunchAr('marker-webar')}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <Scan className="h-4 w-4 text-[var(--accent-gold)] shrink-0" />
+                    <div>
+                      <div>Marker WebAR</div>
+                      <div className="text-[10px] text-slate-400">In-browser camera tracking (Hiro)</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowArMenu(false);
+                      setShowHiroGuide(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                  >
+                    <HelpCircle className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div>
+                      <div>Hiro Marker Guide</div>
+                      <div className="text-[10px] text-slate-500">Display or print target pattern</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -849,15 +929,65 @@ export default function Model3DViewer({
             )}
 
             {/* Bottom-right AR trigger in 3D mode */}
-            <div className="absolute bottom-3 right-3 z-20">
+            <div className="absolute bottom-3 right-3 z-20 flex items-center">
               <button
-                onClick={handleLaunchAr}
+                onClick={() => handleLaunchAr()}
                 aria-label="View on My Table (AR)"
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-black/85 px-4 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-xl transition hover:bg-emerald-500/20"
+                className="inline-flex items-center gap-2 rounded-l-xl border border-emerald-500/50 bg-black/85 px-4 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-xl transition hover:bg-emerald-500/20"
               >
                 <Camera className="h-4 w-4" />
                 <span>View on My Table (AR)</span>
               </button>
+              <button
+                onClick={() => setShowArMenu((v) => !v)}
+                aria-label="AR Modes options"
+                title="Select AR Mode"
+                className="inline-flex items-center justify-center rounded-r-xl border border-l-0 border-emerald-500/50 bg-black/85 px-2 py-2.5 text-xs font-bold text-emerald-300 backdrop-blur-md shadow-xl transition hover:bg-emerald-500/20"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+
+              {/* AR Modes Dropdown */}
+              {showArMenu && (
+                <div className="absolute bottom-full right-0 mb-2 w-64 rounded-2xl border border-slate-700 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-md z-30">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Choose AR Experience
+                  </div>
+                  <button
+                    onClick={() => handleLaunchAr(platform.isIOS ? 'quick-look' : 'scene-viewer')}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <Camera className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <div>
+                      <div>Surface AR (Real Table)</div>
+                      <div className="text-[10px] text-slate-400">Scene Viewer / Apple Quick Look</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleLaunchAr('marker-webar')}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    <Scan className="h-4 w-4 text-[var(--accent-gold)] shrink-0" />
+                    <div>
+                      <div>Marker WebAR</div>
+                      <div className="text-[10px] text-slate-400">In-browser camera tracking (Hiro)</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowArMenu(false);
+                      setShowHiroGuide(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+                  >
+                    <HelpCircle className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div>
+                      <div>Hiro Marker Guide</div>
+                      <div className="text-[10px] text-slate-500">Display or print target pattern</div>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
             {hasDims && !showDims && <DimBadge />}
@@ -868,14 +998,14 @@ export default function Model3DViewer({
             <div className="flex items-center gap-2">
               {arStatus === 'available' ? (
                 <>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                   <span className="text-emerald-400 font-medium">
-                    AR Ready — tap "View on My Table" to preview at full real-world scale
+                    AR Ready (Surface & Marker) — tap "View on My Table" to preview in AR
                   </span>
                 </>
               ) : (
                 <>
-                  <Smartphone className="h-4 w-4 text-amber-400" />
+                  <Smartphone className="h-4 w-4 text-amber-400 shrink-0" />
                   <span className="text-slate-400">
                     Drag to rotate 360° • Scroll / Pinch to zoom • Tap "View on My Table" for AR
                   </span>
@@ -904,7 +1034,7 @@ export default function Model3DViewer({
         </div>
       )}
 
-      {/* ── DESKTOP QR CODE MODAL FOR MOBILE AR ── */}
+      {/* ── DESKTOP QR CODE & AR CHOOSER MODAL ── */}
       {showQrModal && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center shadow-2xl">
@@ -945,6 +1075,20 @@ export default function Model3DViewer({
               <span>Works directly in Safari (iOS) and Chrome (Android)</span>
             </div>
 
+            {/* Desktop Webcam Marker AR option */}
+            <div className="mt-4 pt-3 border-t border-slate-800/80">
+              <button
+                onClick={() => {
+                  setShowQrModal(false);
+                  setIsMarkerArOpen(true);
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-gold)]/40 bg-[var(--accent-gold)]/10 py-2.5 text-xs font-bold text-[var(--accent-gold)] transition hover:bg-[var(--accent-gold)]/20"
+              >
+                <Scan className="h-4 w-4" />
+                <span>Try Marker AR with Webcam</span>
+              </button>
+            </div>
+
             {qrEncodedUrl && (
               <div className="mt-3 rounded-lg bg-slate-950/70 p-2 border border-slate-800 text-left">
                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-0.5">Encoded URL</span>
@@ -962,13 +1106,32 @@ export default function Model3DViewer({
 
             <button
               onClick={() => setShowQrModal(false)}
-              className="mt-5 w-full rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
+              className="mt-4 w-full rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
             >
               Close
             </button>
           </div>
         </div>
       )}
+
+      {/* ── MARKER-BASED WEBAR MODAL ── */}
+      <MarkerArModal
+        isOpen={isMarkerArOpen}
+        onClose={() => setIsMarkerArOpen(false)}
+        modelUrl={modelUrl}
+        name={name}
+        scale={scale}
+        widthCm={widthCm}
+        heightCm={heightCm}
+        depthCm={depthCm}
+        onEvent={onEvent}
+      />
+
+      {/* ── HIRO MARKER GUIDE MODAL ── */}
+      <HiroMarkerModal
+        isOpen={showHiroGuide}
+        onClose={() => setShowHiroGuide(false)}
+      />
     </div>
   );
 }

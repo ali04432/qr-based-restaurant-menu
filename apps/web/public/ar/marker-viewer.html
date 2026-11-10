@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Silver Sapoon — Marker AR</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #05070a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #fff;
+    }
+
+    /* Video element inserted by AR.js */
+    #arjs-video {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      z-index: 1 !important;
+    }
+
+    /* A-Frame canvas */
+    .a-canvas {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 2 !important;
+    }
+
+    /* UI Overlay Layer */
+    #ui-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Header Bar */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 15, 26, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 10px 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .dish-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dish-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dish-subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .close-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+
+    /* Scanning Reticle & Status Banner */
+    .status-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin: auto 0;
+    }
+
+    .scan-reticle {
+      width: 220px;
+      height: 220px;
+      border: 2px dashed rgba(212, 175, 55, 0.6);
+      border-radius: 20px;
+      position: relative;
+      animation: pulse-reticle 2.2s infinite ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .scan-reticle.detected {
+      border: 2px solid #10b981;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.4);
+      animation: none;
+    }
+
+    .scan-corners {
+      position: absolute;
+      inset: -4px;
+      border: 3px solid transparent;
+      border-radius: 24px;
+    }
+
+    @keyframes pulse-reticle {
+      0% { transform: scale(0.96); opacity: 0.6; }
+      50% { transform: scale(1.04); opacity: 1; border-color: rgba(212, 175, 55, 0.9); }
+      100% { transform: scale(0.96); opacity: 0.6; }
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-pill.detected {
+      background: rgba(6, 78, 59, 0.9);
+      border-color: rgba(52, 211, 153, 0.4);
+      color: #6ee7b7;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: ping-dot 1.5s infinite;
+    }
+
+    .status-pill.detected .status-dot {
+      background: #10b981;
+      animation: none;
+    }
+
+    @keyframes ping-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(10, 15, 26, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
+      padding: 10px 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .ctrl-button {
+      height: 38px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-button:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .ctrl-button.gold {
+      background: rgba(212, 175, 55, 0.15);
+      border-color: rgba(212, 175, 55, 0.4);
+      color: #f6d860;
+    }
+
+    .ctrl-button.gold:hover {
+      background: rgba(212, 175, 55, 0.25);
+    }
+
+    /* Modal / Overlay for Marker Guide */
+    #marker-helper-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .helper-card {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 24px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .helper-card img {
+      width: 180px;
+      height: 180px;
+      border-radius: 12px;
+      margin: 16px auto;
+      display: block;
+      background: #fff;
+      padding: 8px;
+    }
+
+    /* Error Message Overlay */
+    #error-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #07090e;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .error-card {
+      max-width: 400px;
+      background: #0f172a;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 20px;
+      padding: 24px;
+    }
+  </style>
+
+  <!-- Load A-Frame and AR.js (Local with CDN fallback) -->
+  <script src="/vendor/aframe.min.js"></script>
+  <script>
+    if (typeof AFRAME === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"><\/script>');
+    }
+  </script>
+  <script src="/vendor/aframe-ar.js"></script>
+  <script>
+    if (typeof THREEx === 'undefined' || !THREEx.ArToolkitContext) {
+      document.write('<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"><\/script>');
+    }
+  </script>
+</head>
+<body>
+
+  <!-- AR.js A-Frame Scene -->
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best;"
+    renderer="logarithmicDepthBuffer: true; antialias: true; alpha: true;"
+    vr-mode-ui="enabled: false"
+  >
+    <a-assets timeout="25000">
+      <!-- GLB model asset injected dynamically via script -->
+    </a-assets>
+
+    <!-- Standard Hiro Marker -->
+    <a-marker preset="hiro" id="ar-marker" emitevents="true">
+      <a-entity
+        id="ar-food-model"
+        position="0 0.05 0"
+        rotation="0 0 0"
+        scale="1 1 1"
+      ></a-entity>
+    </a-marker>
+
+    <!-- Camera entity -->
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <!-- Luxury UI Overlay -->
+  <div id="ui-overlay">
+    <!-- Top Bar -->
+    <div class="header-bar interactive">
+      <div class="dish-info">
+        <div class="dish-title" id="dish-name-label">
+          <span>Loading Dish...</span>
+        </div>
+        <div class="dish-subtitle">Marker-Based WebAR • Hiro Pattern</div>
+      </div>
+      <button class="close-btn" id="close-ar-btn" title="Exit AR">✕</button>
+    </div>
+
+    <!-- Center Reticle / Detection Status -->
+    <div class="status-container">
+      <div class="scan-reticle" id="reticle">
+        <div class="scan-corners"></div>
+      </div>
+      <div class="status-pill" id="status-pill">
+        <div class="status-dot"></div>
+        <span id="status-text">Point camera at Hiro marker</span>
+      </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="controls-bar interactive">
+      <button class="ctrl-button" id="rotate-left-btn" title="Rotate Left">⟲ Rotate</button>
+      <button class="ctrl-button" id="rotate-right-btn" title="Rotate Right">⟳ Rotate</button>
+      <button class="ctrl-button" id="scale-up-btn" title="Enlarge Model">＋ Scale</button>
+      <button class="ctrl-button" id="scale-down-btn" title="Shrink Model">－ Scale</button>
+      <button class="ctrl-button gold" id="helper-btn" title="Show Hiro Marker">Marker Guide</button>
+    </div>
+  </div>
+
+  <!-- Hiro Marker Guide Modal -->
+  <div id="marker-helper-modal">
+    <div class="helper-card">
+      <h3 style="font-size: 16px; font-weight: 700; color: #f6d860;">Hiro AR Marker</h3>
+      <p style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
+        Point your phone camera at this pattern on a computer screen, tablet, or printed paper.
+      </p>
+      <img src="/ar/hiro-marker.png" alt="Standard Hiro Marker">
+      <div style="display: flex; gap: 8px; justify-content: center; margin-top: 14px;">
+        <button class="ctrl-button gold" id="close-helper-btn">Got It, Back to Camera</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Permission / Error Overlay -->
+  <div id="error-overlay">
+    <div class="error-card">
+      <h3 style="font-size: 18px; font-weight: 700; color: #ef4444; margin-bottom: 8px;">Camera Access Required</h3>
+      <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5;" id="error-desc">
+        Augmented Reality requires camera access. Please grant camera permission in your browser address bar and reload.
+      </p>
+      <div style="margin-top: 18px; display: flex; gap: 10px; justify-content: center;">
+        <button class="ctrl-button gold" onclick="window.location.reload()">Retry Camera</button>
+        <button class="ctrl-button" id="error-exit-btn">Return to 3D Viewer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Parse Query Parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const modelUrl = urlParams.get('model') || '/models/wagyu_beef_steak.glb';
+      const dishName = urlParams.get('name') || 'Food Item';
+      const scaleParam = parseFloat(urlParams.get('scale') || '1.0');
+      const widthCm = parseFloat(urlParams.get('width') || '24');
+
+      document.getElementById('dish-name-label').textContent = dishName;
+
+      // Model Scale & Rotation State
+      // In calibrated GLBs, dishes are ~0.24m wide. In AR.js, 1 unit = ~0.10m marker width.
+      // Scaling by ~1.2 - 1.5 centers the dining plate nicely above the Hiro marker.
+      let currentScale = !isNaN(scaleParam) && scaleParam > 0 ? scaleParam : 1.0;
+      let currentRotationY = 0;
+
+      const foodEntity = document.getElementById('ar-food-model');
+      const reticle = document.getElementById('reticle');
+      const statusPill = document.getElementById('status-pill');
+      const statusText = document.getElementById('status-text');
+
+      // Set gltf-model on entity
+      foodEntity.setAttribute('gltf-model', modelUrl);
+      updateTransform();
+
+      function updateTransform() {
+        foodEntity.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+        foodEntity.setAttribute('rotation', `0 ${currentRotationY} 0`);
+      }
+
+      // Marker Event Listeners
+      const marker = document.getElementById('ar-marker');
+      let isMarkerDetected = false;
+
+      marker.addEventListener('markerFound', function () {
+        isMarkerDetected = true;
+        reticle.classList.add('detected');
+        statusPill.classList.add('detected');
+        statusText.textContent = 'Hiro Marker Detected — Showing ' + dishName;
+        window.parent.postMessage({ type: 'AR_EVENT', event: 'marker-found', dishName }, '*');
+      });
+
+      marker.addEventListener('markerLost', function () {
+        isMarkerDetected = false;
+        reticle.classList.remove('detected');
+        statusPill.classList.remove('detected');
+        statusText.textContent = 'Point camera at Hiro marker';
+        window.parent.postMessage({ type: 'AR_EVENT', event: 'marker-lost' }, '*');
+      });
+
+      // Interactive Controls
+      document.getElementById('rotate-left-btn').addEventListener('click', function () {
+        currentRotationY = (currentRotationY - 30) % 360;
+        updateTransform();
+      });
+
+      document.getElementById('rotate-right-btn').addEventListener('click', function () {
+        currentRotationY = (currentRotationY + 30) % 360;
+        updateTransform();
+      });
+
+      document.getElementById('scale-up-btn').addEventListener('click', function () {
+        currentScale = Math.min(3.5, currentScale * 1.15);
+        updateTransform();
+      });
+
+      document.getElementById('scale-down-btn').addEventListener('click', function () {
+        currentScale = Math.max(0.3, currentScale * 0.85);
+        updateTransform();
+      });
+
+      // Marker Helper Modal
+      const helperModal = document.getElementById('marker-helper-modal');
+      document.getElementById('helper-btn').addEventListener('click', function () {
+        helperModal.style.display = 'flex';
+      });
+      document.getElementById('close-helper-btn').addEventListener('click', function () {
+        helperModal.style.display = 'none';
+      });
+
+      // Exit / Cleanup Handler
+      function stopCameraAndExit() {
+        // Stop all video tracks
+        try {
+          const video = document.getElementById('arjs-video') || document.querySelector('video');
+          if (video && video.srcObject) {
+            const stream = video.srcObject;
+            const tracks = stream.getTracks ? stream.getTracks() : [];
+            tracks.forEach(function (t) { t.stop(); });
+            video.srcObject = null;
+          }
+        } catch (e) {
+          console.warn('Error stopping camera:', e);
+        }
+
+        // Inform parent
+        window.parent.postMessage({ type: 'AR_EVENT', event: 'request-close' }, '*');
+      }
+
+      document.getElementById('close-ar-btn').addEventListener('click', stopCameraAndExit);
+      document.getElementById('error-exit-btn').addEventListener('click', stopCameraAndExit);
+
+      // Listen for parent messages (e.g. STOP_AR)
+      window.addEventListener('message', function (event) {
+        if (event.data && (event.data.type === 'STOP_AR' || event.data === 'STOP_AR')) {
+          stopCameraAndExit();
+        }
+      });
+
+      window.addEventListener('beforeunload', stopCameraAndExit);
+
+      // Camera Permission & Error Handling
+      window.addEventListener('arjs-video-loaded', function () {
+        window.parent.postMessage({ type: 'AR_EVENT', event: 'camera-ready' }, '*');
+      });
+
+      // Check camera permission after timeout if video is not mounting
+      setTimeout(function () {
+        const video = document.getElementById('arjs-video') || document.querySelector('video');
+        if (!video || !video.srcObject) {
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+              .catch(function (err) {
+                const errorOverlay = document.getElementById('error-overlay');
+                const desc = document.getElementById('error-desc');
+                errorOverlay.style.display = 'flex';
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                  desc.textContent = 'Camera permission was denied. Please allow camera access in your browser settings to view food in AR.';
+                  window.parent.postMessage({ type: 'AR_EVENT', event: 'permission-denied' }, '*');
+                } else {
+                  desc.textContent = 'Unable to start camera: ' + (err.message || 'Device error') + '. Please try 3D view instead.';
+                  window.parent.postMessage({ type: 'AR_EVENT', event: 'camera-error', error: err.message }, '*');
+                }
+              });
+          }
+        }
+      }, 5000);
+
+    })();
+  </script>
+</body>
+</html>
+

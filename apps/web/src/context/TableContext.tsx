@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { apiClient } from '../lib/api-client';
 
@@ -28,6 +28,14 @@ export interface TableContextState {
 const TableContext = createContext<TableContextState | undefined>(undefined);
 
 export function TableProvider({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <TableProviderInner>{children}</TableProviderInner>
+    </Suspense>
+  );
+}
+
+function TableProviderInner({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [tableId, setTableId] = useState<string | null>(null);

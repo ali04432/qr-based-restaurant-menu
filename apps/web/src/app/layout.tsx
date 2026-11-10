@@ -9,6 +9,10 @@ import { FavoritesProvider } from '../context/FavoritesContext';
 import { AuthProvider } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 
+// Opt out of static prerendering globally — this SaaS app is fully dynamic
+// (real-time orders, auth tokens, QR session params, useSearchParams everywhere)
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: {
     default: 'Silver Sapoon',
