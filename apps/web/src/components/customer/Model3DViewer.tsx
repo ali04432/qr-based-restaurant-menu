@@ -419,7 +419,12 @@ export default function Model3DViewer({
       const a = document.createElement('a');
       a.setAttribute('rel', 'ar');
       a.setAttribute('href', iosModelUrl);
+      const img = document.createElement('img');
+      img.alt = name;
+      a.appendChild(img);
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       onEventRef.current?.('ar.quicklook.launched');
       return;
     }
@@ -618,6 +623,7 @@ export default function Model3DViewer({
             ar
             ar-modes="webxr scene-viewer quick-look"
             ar-scale={fixedArScale ? 'fixed' : 'auto'}
+            ar-placement="floor"
             xr-environment
             loading="eager"
             reveal="auto"

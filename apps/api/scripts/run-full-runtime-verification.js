@@ -28,7 +28,7 @@ async function waitForServer(url, timeoutMs = 30000) {
       if (res.status === 200 || res.status === 304) {
         return true;
       }
-    } catch (e) {}
+    } catch (e) { }
     await sleep(800);
   }
   return false;
@@ -69,10 +69,10 @@ class CDPClient {
       } else if (data.method === 'Network.responseReceived' && this.activeMonitoring) {
         const { response } = data.params;
         if (response.status >= 400 &&
-            !response.url.includes('favicon.ico') &&
-            !response.url.includes('_next') &&
-            !response.url.includes('socket.io') &&
-            !response.url.includes('webpack')) {
+          !response.url.includes('favicon.ico') &&
+          !response.url.includes('_next') &&
+          !response.url.includes('socket.io') &&
+          !response.url.includes('webpack')) {
           this.networkErrors.push({ url: response.url, status: response.status });
         }
       }
@@ -184,7 +184,7 @@ async function run() {
       env: apiEnv,
       stdio: 'ignore'
     });
-    
+
     // Wait for DB warm-up on /api/menu
     for (let attempt = 0; attempt < 25; attempt++) {
       try {
@@ -193,7 +193,7 @@ async function run() {
           apiReady = true;
           break;
         }
-      } catch (e) {}
+      } catch (e) { }
       await sleep(1000);
     }
   }
@@ -233,8 +233,50 @@ async function run() {
     record('Asset Delivery', `Web Proxy /models/${glb}`, webRes.status === 200, `HTTP ${webRes.status}`);
   }
 
+  // 2b. Verify all USDZ model URLs return HTTP 200 with model/vnd.usdz+zip
+  console.log('\n--- 2b. Direct USDZ HTTP Response Verification ---');
+  const usdzFiles = [
+    'pan_seared_salmon.usdz',
+    'wagyu_beef_steak.usdz',
+    'braised_lamb_shank.usdz',
+    'silver_sapoon_burger.usdz'
+  ];
+
+  for (const usdz of usdzFiles) {
+    const apiRes = await checkUrl(`http://localhost:4000/models/${usdz}`);
+    const webRes = await checkUrl(`http://localhost:3000/models/${usdz}`);
+    const isUsdzMime = (apiRes.headers?.['content-type'] || '').includes('usdz');
+    record('Asset Delivery', `API /models/${usdz} (USDZ)`, apiRes.status === 200 && isUsdzMime, `HTTP ${apiRes.status}, Content-Type: ${apiRes.headers?.['content-type']}`);
+    record('Asset Delivery', `Web Proxy /models/${usdz} (USDZ)`, webRes.status === 200, `HTTP ${webRes.status}`);
+  }
+
   // 3. Launch Real Google Chrome with CDP
   console.log('\n--- 3. Launching Real Chrome Browser with CDP ---');
+  // Pre-warm DB connection before browser testing
+  for (let attempt = 0; attempt < 15; attempt++) {
+    try {
+      const testRes = await checkUrl('http://localhost:4000/api/menu');
+      if (testRes.status === 200) {
+        console.log('Database connection is warmed up and responsive.');
+        break;
+      }
+    } catch (e) { }
+    await sleep(800);
+  }
+
+  // Pre-warm Next.js on-demand route compilation
+  console.log('Pre-warming Next.js page compilation...');
+  for (let attempt = 0; attempt < 25; attempt++) {
+    try {
+      const testRes = await checkUrl('http://localhost:3000/menu/item/bac6c92a-b96b-46d8-b746-1b374939bf43');
+      if (testRes.status === 200) {
+        console.log('Next.js page compiled and ready.');
+        break;
+      }
+    } catch (e) { }
+    await sleep(800);
+  }
+
   const userDataDir = path.resolve(__dirname, '../.chrome-test-profile');
   if (!fs.existsSync(userDataDir)) {
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -261,7 +303,7 @@ async function run() {
     console.log('\n--- 4. Testing Dish 1: Wagyu Beef Steak (bac6c92a-b96b-46d8-b746-1b374939bf43) ---');
     await cdp.navigate('http://localhost:3000/menu/item/bac6c92a-b96b-46d8-b746-1b374939bf43');
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const isStillLoading = await cdp.evaluate(`return document.body.innerText.includes('Loading dish details');`);
       if (!isStillLoading) break;
       await sleep(500);
@@ -298,6 +340,51 @@ async function run() {
       return el ? (el.hasAttribute('auto-rotate') || el.autoRotate === true) : false;
     `);
     record('3D Controls', 'Auto-Rotate Active on Wagyu Beef Steak', autoRotateAttr);
+
+    // AR Attributes & AR Button verification
+    const arAttributes = await cdp.evaluate(`
+      const el = document.querySelector('model-viewer');
+      if (!el) return { hasAr: false, arModes: '', arScale: '' };
+      return {
+        hasAr: el.hasAttribute('ar'),
+        arModes: el.getAttribute('ar-modes') || '',
+        arScale: el.getAttribute('ar-scale') || '',
+        iosSrc: el.getAttribute('ios-src') || ''
+      };
+    `);
+    record('AR Configuration', 'Wagyu Beef Steak has ar attribute enabled', arAttributes.hasAr);
+    record('AR Configuration', 'Wagyu Beef Steak ar-modes includes scene-viewer & quick-look',
+      arAttributes.arModes.includes('scene-viewer') && arAttributes.arModes.includes('quick-look'),
+      arAttributes.arModes
+    );
+    record('AR Configuration', 'Wagyu Beef Steak ar-scale configured', !!arAttributes.arScale, arAttributes.arScale);
+    record('AR Configuration', 'Wagyu Beef Steak ios-src matches wagyu_beef_steak.usdz', (arAttributes.iosSrc || '').includes('wagyu_beef_steak.usdz'), arAttributes.iosSrc);
+
+    // AR Button & Desktop QR Modal test
+    const arButtonFound = await cdp.evaluate(`
+      const btns = Array.from(document.querySelectorAll('button'));
+      const arBtn = btns.find(b => b.innerText.includes('My Table') || b.innerText.includes('(AR)'));
+      return !!arBtn;
+    `);
+    record('AR Controls', '"View on My Table (AR)" button visible in DOM', arButtonFound);
+
+    // Click AR button to verify Desktop QR Modal
+    const qrModalTriggered = await cdp.evaluate(`
+      const btns = Array.from(document.querySelectorAll('button'));
+      const arBtn = btns.find(b => b.innerText.includes('My Table') || b.innerText.includes('(AR)'));
+      if (arBtn) { arBtn.click(); return true; }
+      return false;
+    `);
+    await sleep(800);
+    const qrModalState = await cdp.evaluate(`
+      const modalText = document.body.innerText;
+      const hasQrModal = modalText.includes('Experience in AR on Your Phone') || modalText.includes('Point your smartphone camera');
+      const closeBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Close');
+      if (closeBtn) closeBtn.click();
+      return hasQrModal;
+    `);
+    await sleep(500);
+    record('AR Desktop Flow', 'Clicking AR button opens Mobile QR scan modal with tunnel URL instructions', qrModalTriggered && qrModalState);
 
     const initialTurntable = await cdp.evaluate(`
       const el = document.querySelector('model-viewer');
@@ -434,7 +521,7 @@ async function run() {
     console.log('\n--- 5. Testing Dish 2: Pan-Seared Salmon (98c7d921-a833-498f-83c6-028d301c7d94) ---');
     await cdp.navigate('http://localhost:3000/menu/item/98c7d921-a833-498f-83c6-028d301c7d94');
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const isStillLoading = await cdp.evaluate(`return document.body.innerText.includes('Loading dish details');`);
       if (!isStillLoading) break;
       await sleep(500);
@@ -459,12 +546,20 @@ async function run() {
     record('Model Isolation', 'Salmon Source matches pan_seared_salmon.glb', src2.includes('pan_seared_salmon.glb'), src2);
     record('Model Isolation', 'Salmon does NOT leak Wagyu Steak model', !src2.includes('wagyu_beef_steak.glb'));
 
+    // Salmon AR capability check
+    const arSalmon = await cdp.evaluate(`
+      const el = document.querySelector('model-viewer');
+      return el ? { hasAr: el.hasAttribute('ar'), iosSrc: el.getAttribute('ios-src') || '' } : { hasAr: false, iosSrc: '' };
+    `);
+    record('AR Configuration', 'Pan-Seared Salmon has ar attribute enabled', arSalmon.hasAr);
+    record('AR Configuration', 'Pan-Seared Salmon ios-src matches pan_seared_salmon.usdz', (arSalmon.iosSrc || '').includes('pan_seared_salmon.usdz'), arSalmon.iosSrc);
+
 
     // 6. Test Dish 3: Braised Lamb Shank (7926400a-e47a-4f77-b9f7-d1c3fa5f6a1b)
     console.log('\n--- 6. Testing Dish 3: Braised Lamb Shank (7926400a-e47a-4f77-b9f7-d1c3fa5f6a1b) ---');
     await cdp.navigate('http://localhost:3000/menu/item/7926400a-e47a-4f77-b9f7-d1c3fa5f6a1b');
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const isStillLoading = await cdp.evaluate(`return document.body.innerText.includes('Loading dish details');`);
       if (!isStillLoading) break;
       await sleep(500);
@@ -489,12 +584,20 @@ async function run() {
     record('Model Isolation', 'Lamb Shank Source matches braised_lamb_shank.glb', src3.includes('braised_lamb_shank.glb'), src3);
     record('Model Isolation', 'Lamb Shank does NOT leak Salmon or Steak model', !src3.includes('pan_seared_salmon') && !src3.includes('wagyu_beef_steak'));
 
+    // Lamb Shank AR capability check
+    const arLamb = await cdp.evaluate(`
+      const el = document.querySelector('model-viewer');
+      return el ? { hasAr: el.hasAttribute('ar'), iosSrc: el.getAttribute('ios-src') || '' } : { hasAr: false, iosSrc: '' };
+    `);
+    record('AR Configuration', 'Braised Lamb Shank has ar attribute enabled', arLamb.hasAr);
+    record('AR Configuration', 'Braised Lamb Shank ios-src matches braised_lamb_shank.usdz', (arLamb.iosSrc || '').includes('braised_lamb_shank.usdz'), arLamb.iosSrc);
+
 
     // 7. Test Dish 4: Silver Sapoon Burger (6870227a-9df2-462b-b2bc-678d11e0b203)
     console.log('\n--- 7. Testing Dish 4: Silver Sapoon Burger (6870227a-9df2-462b-b2bc-678d11e0b203) ---');
     await cdp.navigate('http://localhost:3000/menu/item/6870227a-9df2-462b-b2bc-678d11e0b203');
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const isStillLoading = await cdp.evaluate(`return document.body.innerText.includes('Loading dish details');`);
       if (!isStillLoading) break;
       await sleep(500);
@@ -518,6 +621,14 @@ async function run() {
     record('3D Viewer', 'Silver Sapoon Burger 3D Model Loaded in Browser', loaded4, `Loaded: ${loaded4}, src: ${src4}`);
     record('Model Isolation', 'Burger Source matches silver_sapoon_burger.glb', src4.includes('silver_sapoon_burger.glb'), src4);
     record('Model Isolation', 'Burger does NOT leak Lamb, Salmon, or Steak model', !src4.includes('braised_lamb') && !src4.includes('pan_seared') && !src4.includes('wagyu_beef'));
+
+    // Burger AR capability check
+    const arBurger = await cdp.evaluate(`
+      const el = document.querySelector('model-viewer');
+      return el ? { hasAr: el.hasAttribute('ar'), iosSrc: el.getAttribute('ios-src') || '' } : { hasAr: false, iosSrc: '' };
+    `);
+    record('AR Configuration', 'Silver Sapoon Burger has ar attribute enabled', arBurger.hasAr);
+    record('AR Configuration', 'Silver Sapoon Burger ios-src matches silver_sapoon_burger.usdz', (arBurger.iosSrc || '').includes('silver_sapoon_burger.usdz'), arBurger.iosSrc);
 
 
     // 8. Test Direct Switching from Burger directly back to Salmon (Model Switching / No Previous Dish Display)
@@ -552,7 +663,7 @@ async function run() {
     console.log('\n--- 9. Testing Fallback for Item Without 3D Model ---');
     // Dish "Crispy Calamari" (ID: f2ba2eb2-0ae3-4543-95e7-9aa8de4a98dd) in the database has no AR model
     await cdp.navigate('http://localhost:3000/menu/item/f2ba2eb2-0ae3-4543-95e7-9aa8de4a98dd');
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       const isStillLoading = await cdp.evaluate(`return document.body.innerText.includes('Loading dish details');`);
       if (!isStillLoading) break;
       await sleep(500);
@@ -563,13 +674,19 @@ async function run() {
     `);
     record('Fallback Handling', 'Dish without 3D model shows "3D view coming soon" notice', fallbackActive);
 
+    const calamariNoArBtn = await cdp.evaluate(`
+      const btns = Array.from(document.querySelectorAll('button'));
+      return !btns.some(b => b.innerText.includes('My Table') || b.innerText.includes('(AR)'));
+    `);
+    record('Fallback Handling', 'Calamari does NOT render "View on My Table (AR)" button', calamariNoArBtn);
+
 
     // 10. Check Console Errors and Network Failures
     console.log('\n--- 10. Console Errors & Network Requests Audit ---');
     const severeConsoleErrors = cdp.consoleLogs.filter(
       (m) => (m.type === 'error' || m.level === 'error') &&
-             !m.text.includes('favicon.ico') &&
-             !m.text.includes('webpack')
+        !m.text.includes('favicon.ico') &&
+        !m.text.includes('webpack')
     );
     record('Console Cleanliness', 'Zero Critical Browser Console Errors', severeConsoleErrors.length === 0,
       severeConsoleErrors.length === 0 ? '0 errors' : `${severeConsoleErrors.length} errors: ${severeConsoleErrors.map(e => e.text).join('; ')}`
@@ -589,7 +706,7 @@ async function run() {
     cdp.close();
     try {
       chromeProc.kill();
-    } catch (e) {}
+    } catch (e) { }
   }
 
   console.log('\n================================================================');
