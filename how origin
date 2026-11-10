@@ -1,0 +1,28 @@
+* [33m29b2d05[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mnew-feature[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m, [m[1;32mfeature-name[m[33m)[m Auto-backup: 2026-11-10 22:16
+* [33m43b22db[m Update Silver Spoon 3D food viewer and runtime verification
+* [33m0baad43[m Add new 3D AR food models
+* [33m27f3917[m Auto-backup: 2026-10-31 11:06
+* [33m4da1c4c[m Update Silver Spoon admin login credentials
+* [33m3803160[m fix(web): resolve infinite dish details loading and unify relative API base for AR view
+*   [33m7f9185a[m Merge pull request #1 from ali04432/feature/3d-ar-view
+[32m|[m[33m\[m  
+[32m|[m * [33mddfbf38[m[33m ([m[1;31morigin/feature/3d-ar-view[m[33m, [m[1;32mfeature/3d-ar-view[m[33m)[m fix(menu): resolve menu item route mismatch and category object mapping
+[32m|[m * [33mcf34822[m Add 3D view and AR support (Phases 1-3)
+[32m|[m[32m/[m  
+* [33m6b902b3[m Save today's QR restaurant menu updates
+* [33ma5a8e0d[m Fix customer order placement and QR table validation
+* [33mb00345d[m Complete Phase 8 AR real-scale updates
+* [33m9a2b4b9[m Implement Phase 8 3D food viewer and AR visualization
+* [33m7675cf9[m Complete Phase 6 integrations and fix workspace issues
+* [33m8ea775e[m Save current project updates
+* [33m778f7b4[m Phase 6: AI and AR features
+* [33m05d23c2[m Phase 5: Waiter + Cashier panels, DB migration fixes
+* [33md1b5a75[m Complete Phase 4 Milestone 9: Enterprise Security, Audit System, Observability & Disaster Recovery
+* [33m7d24491[m Complete Phase 4 Milestone 8: Platform Super Admin, SaaS Subscriptions & Entitlements Engine
+* [33m85bf29e[m Complete Phase 4 Milestone 7: Multi-Branch & Multi-Location Management with BranchContext and Outlet Console
+* [33m966ab9a[m Complete Phase 4 Milestones 5 & 6: Multi-Provider Integrations and Advanced Scheduled Reporting with Background Jobs
+* [33mcdf09ef[m Phase 4 progress checkpoint
+* [33m17f8708[m reomve changes
+* [33m25edd47[m Complete KDS and Customer UI updates with theme and real-time sync
+* [33m5aa45a3[m Phase 1 Complete: Customer Flow UI, Cart, and KDS Frontend added
+* [33m3bab9be[m Phase 1 - Foundation and Architecture
