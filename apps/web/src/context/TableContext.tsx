@@ -6,6 +6,7 @@ import { apiClient } from '../lib/api-client';
 
 export interface TableContextState {
   restaurantId: string | null;
+  restaurantSlug: string | null;
   tableId: string | null;
   tableNumber: string | null;
   restaurantName: string | null;
@@ -17,6 +18,7 @@ export interface TableContextState {
   dismissNotice: () => void;
   setSession: (params: {
     restaurantId: string;
+    restaurantSlug?: string;
     tableId: string;
     tableNumber?: string;
     restaurantName?: string;
@@ -38,6 +40,7 @@ export function TableProvider({ children }: { children: ReactNode }) {
 function TableProviderInner({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [restaurantSlug, setRestaurantSlug] = useState<string | null>(null);
   const [tableId, setTableId] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
@@ -53,22 +56,29 @@ function TableProviderInner({ children }: { children: ReactNode }) {
 
   const setSession = useCallback((params: {
     restaurantId: string;
+    restaurantSlug?: string;
     tableId: string;
     tableNumber?: string;
     restaurantName?: string;
     qrToken?: string;
   }) => {
+    const cleanTableNum = params.tableNumber
+      ? (params.tableNumber.length === 1 ? `0${params.tableNumber}` : params.tableNumber)
+      : (params.tableId.length <= 2 ? (params.tableId.length === 1 ? `0${params.tableId}` : params.tableId) : params.tableId);
+
     setRestaurantId(params.restaurantId);
+    if (params.restaurantSlug) setRestaurantSlug(params.restaurantSlug);
     setTableId(params.tableId);
-    setTableNumber(params.tableNumber || params.tableId);
+    setTableNumber(cleanTableNum);
     if (params.restaurantName) setRestaurantName(params.restaurantName);
     if (params.qrToken) setQrToken(params.qrToken);
     setIsTableVerified(true);
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('qr_restaurantId', params.restaurantId);
+      if (params.restaurantSlug) localStorage.setItem('qr_restaurantSlug', params.restaurantSlug);
       localStorage.setItem('qr_tableId', params.tableId);
-      if (params.tableNumber) localStorage.setItem('qr_tableNumber', params.tableNumber);
+      localStorage.setItem('qr_tableNumber', cleanTableNum);
       if (params.restaurantName) localStorage.setItem('qr_restaurantName', params.restaurantName);
       if (params.qrToken) localStorage.setItem('qr_token', params.qrToken);
     }
@@ -76,6 +86,7 @@ function TableProviderInner({ children }: { children: ReactNode }) {
 
   const clearSession = useCallback(() => {
     setRestaurantId(null);
+    setRestaurantSlug(null);
     setTableId(null);
     setTableNumber(null);
     setRestaurantName(null);
@@ -86,6 +97,7 @@ function TableProviderInner({ children }: { children: ReactNode }) {
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('qr_restaurantId');
+      localStorage.removeItem('qr_restaurantSlug');
       localStorage.removeItem('qr_tableId');
       localStorage.removeItem('qr_tableNumber');
       localStorage.removeItem('qr_restaurantName');
@@ -93,7 +105,7 @@ function TableProviderInner({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Validate table with backend when URL parameters are present
+  // Synchronize session from URL parameters or persistent browser storage
   useEffect(() => {
     const urlRestaurant = searchParams.get('restaurant') || searchParams.get('restaurantId');
     const urlTable = searchParams.get('table');
@@ -104,8 +116,9 @@ function TableProviderInner({ children }: { children: ReactNode }) {
     const effectiveTable = urlTable || urlTableId;
 
     if (effectiveRestaurant && effectiveTable) {
-      // Immediate initial optimistic assignment
-      const initialTableNum = urlTable || urlTableId || '';
+      // Immediate optimistic assignment
+      const rawNum = urlTable || urlTableId || '';
+      const initialTableNum = rawNum.length === 1 ? `0${rawNum}` : rawNum;
       const initialTableId = urlTableId || urlTable || '';
 
       setRestaurantId(effectiveRestaurant);
@@ -134,25 +147,29 @@ function TableProviderInner({ children }: { children: ReactNode }) {
           if (result && result.table) {
             const authoritativeTableId = result.table.id;
             const authoritativeTableNum = result.table.tableNumber;
-            const resName = result.restaurant?.name || 'Restaurant';
+            const resId = result.restaurant?.id || effectiveRestaurant;
+            const resSlug = result.restaurant?.slug || 'silver-sapoon';
+            const resName = result.restaurant?.name || 'Silver Sapoon';
 
+            setRestaurantId(resId);
+            setRestaurantSlug(resSlug);
             setTableId(authoritativeTableId);
             setTableNumber(authoritativeTableNum);
             setRestaurantName(resName);
             setTableStatus(result.table.status);
             setIsTableVerified(true);
-            setWelcomeNotice(`Welcome to Table ${authoritativeTableNum}! Ordering is now active.`);
+            setWelcomeNotice(`Welcome to Table ${authoritativeTableNum}! Ordering is active.`);
 
             if (typeof window !== 'undefined') {
-              localStorage.setItem('qr_restaurantId', effectiveRestaurant);
+              localStorage.setItem('qr_restaurantId', resId);
+              localStorage.setItem('qr_restaurantSlug', resSlug);
               localStorage.setItem('qr_tableId', authoritativeTableId);
               localStorage.setItem('qr_tableNumber', authoritativeTableNum);
               localStorage.setItem('qr_restaurantName', resName);
             }
           }
         } catch (err) {
-          console.warn('[TableContext] Could not validate table against API, using QR param fallback:', err);
-          // Fallback to initial values without throwing
+          console.warn('[TableContext] Could not validate table against API, using fallback:', err);
           setIsTableVerified(true);
           setWelcomeNotice(`Seated at Table ${initialTableNum}.`);
         } finally {
@@ -163,20 +180,45 @@ function TableProviderInner({ children }: { children: ReactNode }) {
       validateTable();
     } else if (typeof window !== 'undefined') {
       const storedRestaurant = localStorage.getItem('qr_restaurantId');
+      const storedSlug = localStorage.getItem('qr_restaurantSlug');
       const storedTableId = localStorage.getItem('qr_tableId');
       const storedTable = localStorage.getItem('qr_tableNumber');
       const storedName = localStorage.getItem('qr_restaurantName');
       const storedToken = localStorage.getItem('qr_token');
 
       if (storedRestaurant && (storedTableId || storedTable)) {
+        const cleanTable = storedTable ? (storedTable.length === 1 ? `0${storedTable}` : storedTable) : (storedTableId || null);
         setRestaurantId(storedRestaurant);
+        setRestaurantSlug(storedSlug || 'silver-sapoon');
         setTableId(storedTableId || storedTable);
-        setTableNumber(storedTable || storedTableId);
-        setRestaurantName(storedName);
+        setTableNumber(cleanTable);
+        setRestaurantName(storedName || 'Silver Sapoon');
         setQrToken(storedToken);
         setIsTableVerified(true);
+        setIsLoading(false);
+      } else {
+        // Fallback: Resolve active restaurant identity so restaurantId is never null for browsing
+        const resolveDefaultRestaurant = async () => {
+          try {
+            const res: any = await apiClient.get('/api/menu');
+            if (res && res.restaurant) {
+              setRestaurantId(res.restaurant.id);
+              setRestaurantSlug(res.restaurant.slug || 'silver-sapoon');
+              setRestaurantName(res.restaurant.name || 'Silver Sapoon');
+              if (res.table) {
+                setTableId(res.table.id);
+                setTableNumber(res.table.tableNumber);
+                setIsTableVerified(true);
+              }
+            }
+          } catch (e) {
+            // Keep current state
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        resolveDefaultRestaurant();
       }
-      setIsLoading(false);
     } else {
       setIsLoading(false);
     }
@@ -186,6 +228,7 @@ function TableProviderInner({ children }: { children: ReactNode }) {
     <TableContext.Provider
       value={{
         restaurantId,
+        restaurantSlug,
         tableId,
         tableNumber,
         restaurantName,

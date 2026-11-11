@@ -8,16 +8,19 @@ const router = Router();
 /**
  * GET /api/tables/validate
  * Public endpoint to validate a table when a customer scans a QR code.
- * Accepts: restaurantId, table (can be tableNumber, UUID, or qrToken)
+ * Accepts: restaurantId (UUID or slug), table (tableNumber, padded/unpadded, UUID, or qrToken), token
  */
 router.get('/validate', async (req: Request, res: Response, next: NextFunction) => {
-  const { restaurantId, table: tableParam, token: tokenParam } = req.query as {
+  const { restaurantId, restaurant: restaurantParam, table: tableParam, token: tokenParam } = req.query as {
     restaurantId?: string;
+    restaurant?: string;
     table?: string;
     token?: string;
   };
 
-  if (!restaurantId || (!tableParam && !tokenParam)) {
+  const rawRest = restaurantId || restaurantParam;
+
+  if (!rawRest && (!tableParam && !tokenParam)) {
     return next(
       new AppError(
         'restaurantId and table identifier (or token) are required',
@@ -28,20 +31,49 @@ router.get('/validate', async (req: Request, res: Response, next: NextFunction) 
   }
 
   try {
+    // 1. Authoritative Restaurant Resolution (supports UUID, slug, or single-tenant default)
+    let restaurant = rawRest
+      ? await prisma.restaurant.findFirst({
+          where: {
+            OR: [{ id: rawRest }, { slug: rawRest }],
+          },
+        })
+      : null;
+
+    if (!restaurant) {
+      restaurant = await prisma.restaurant.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!restaurant) {
+      return next(new AppError('Restaurant not found.', 404, 'RESTAURANT_NOT_FOUND'));
+    }
+
+    const resolvedRestaurantId = restaurant.id;
+
+    // 2. Multi-format Table Resolution
     const orConditions: any[] = [];
     if (tableParam) {
-      orConditions.push({ id: tableParam });
-      orConditions.push({ tableNumber: tableParam });
-      orConditions.push({ qrToken: tableParam });
-      orConditions.push({ tableNumber: tableParam.replace(/^t-/, '') });
+      const trimmed = String(tableParam).trim();
+      const stripped = trimmed.replace(/^(t-|table-)/i, '');
+      const padded = stripped.padStart(2, '0');
+      const unpadded = stripped.replace(/^0+/, '') || stripped;
+
+      orConditions.push({ id: trimmed });
+      orConditions.push({ tableNumber: trimmed });
+      orConditions.push({ tableNumber: stripped });
+      orConditions.push({ tableNumber: padded });
+      orConditions.push({ tableNumber: unpadded });
+      orConditions.push({ qrToken: trimmed });
     }
     if (tokenParam) {
-      orConditions.push({ qrToken: tokenParam });
+      orConditions.push({ qrToken: String(tokenParam).trim() });
     }
 
     const table = await prisma.table.findFirst({
       where: {
-        restaurantId,
+        restaurantId: resolvedRestaurantId,
         OR: orConditions,
       },
       include: {
@@ -49,6 +81,7 @@ router.get('/validate', async (req: Request, res: Response, next: NextFunction) 
           select: {
             id: true,
             name: true,
+            slug: true,
             logo: true,
             currency: true,
             isOpen: true,
@@ -103,17 +136,32 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   const { restaurantId } = req.query as { restaurantId?: string };
 
   try {
+    const trimmed = String(id).trim();
+    const stripped = trimmed.replace(/^(t-|table-)/i, '');
+    const padded = stripped.padStart(2, '0');
+    const unpadded = stripped.replace(/^0+/, '') || stripped;
+
     const whereClause: any = {
       OR: [
-        { id },
-        { tableNumber: id },
-        { qrToken: id },
-        { tableNumber: id.replace(/^t-/, '') },
+        { id: trimmed },
+        { tableNumber: trimmed },
+        { tableNumber: stripped },
+        { tableNumber: padded },
+        { tableNumber: unpadded },
+        { qrToken: trimmed },
       ],
     };
 
     if (restaurantId) {
-      whereClause.restaurantId = restaurantId;
+      // Resolve restaurant if passed as slug or id
+      const rest = await prisma.restaurant.findFirst({
+        where: { OR: [{ id: restaurantId }, { slug: restaurantId }] },
+      });
+      if (rest) {
+        whereClause.restaurantId = rest.id;
+      } else {
+        whereClause.restaurantId = restaurantId;
+      }
     }
 
     const table = await prisma.table.findFirst({
@@ -123,6 +171,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
           select: {
             id: true,
             name: true,
+            slug: true,
             logo: true,
             currency: true,
             isOpen: true,

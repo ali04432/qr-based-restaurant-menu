@@ -65,7 +65,7 @@ const CART_STORAGE_KEY = "silver_sapoon_cart";
 const FAVORITES_STORAGE_KEY = "silver_sapoon_favorites";
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tableNumber, setTableNumber] = useState<string | null>("07");
+  const [tableNumber, setTableNumber] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);

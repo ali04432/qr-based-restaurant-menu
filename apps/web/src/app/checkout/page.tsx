@@ -22,6 +22,7 @@ import {
     ShoppingCart,
     Smartphone,
     AlertCircle,
+    QrCode,
 } from 'lucide-react';
 
 import CustomerLayout from '../../components/customer/CustomerLayout';
@@ -99,6 +100,8 @@ export default function CheckoutPage() {
         restaurantId,
     } = useTableContext();
 
+    const hasValidTableSession = Boolean(restaurantId && (tableId || tableNumber));
+
     const [paymentMethod, setPaymentMethod] =
         useState<PaymentMethod>('CASH');
 
@@ -175,7 +178,13 @@ export default function CheckoutPage() {
 
                 tableId: String(effectiveTable),
 
+                customerName: customerInfo.name ? customerInfo.name.trim() : undefined,
+
                 customerPhone: customerInfo.phone ? customerInfo.phone.trim() : undefined,
+
+                customerNote: orderNotes ? orderNotes.trim() : undefined,
+
+                orderNotes: orderNotes ? orderNotes.trim() : undefined,
 
                 paymentMethod,
 
@@ -398,6 +407,45 @@ export default function CheckoutPage() {
                             <p className="mt-1 text-xs leading-5 text-red-300/80">
                                 {error}
                             </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Friendly Missing Dining Session Prompt */}
+                {!hasValidTableSession && (
+                    <div
+                        role="region"
+                        aria-label="Table session required"
+                        className="mb-6 flex items-start gap-3 rounded-2xl border border-[var(--accent-gold)]/30 bg-[var(--accent-gold)]/10 p-4 sm:p-5 shadow-[0_4px_20px_rgba(245,179,66,0.08)]"
+                    >
+                        <QrCode className="mt-0.5 h-6 w-6 shrink-0 text-[var(--accent-gold)]" />
+
+                        <div className="flex-1">
+                            <div className="text-sm font-bold text-[var(--accent-gold)]">
+                                Please Scan Your Table QR Code
+                            </div>
+
+                            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                                To send your order directly to the kitchen and waiter, please scan the QR code located on your dining table.
+                            </p>
+
+                            <div className="mt-3 flex flex-wrap gap-2.5">
+                                <Link
+                                    href="/menu"
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] px-3.5 py-1.5 text-xs font-bold text-[var(--text-primary)] hover:border-[var(--accent-gold)]/40 hover:text-[var(--accent-gold)] transition"
+                                >
+                                    <ArrowLeft className="h-3.5 w-3.5" />
+                                    Back to Menu
+                                </Link>
+
+                                <Link
+                                    href="/enter?restaurant=b27cc519-73e3-400a-97c0-9c516907adb4&table=07"
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] px-3.5 py-1.5 text-xs font-black text-black hover:brightness-105 transition"
+                                >
+                                    <QrCode className="h-3.5 w-3.5" />
+                                    Connect Table 07
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -748,13 +796,18 @@ export default function CheckoutPage() {
 
                             <button
                                 type="submit"
-                                disabled={placingOrder}
+                                disabled={placingOrder || !hasValidTableSession}
                                 className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] text-sm font-black text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {placingOrder ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         Sending Order...
+                                    </>
+                                ) : !hasValidTableSession ? (
+                                    <>
+                                        <QrCode className="h-4 w-4" />
+                                        Scan Table QR to Order
                                     </>
                                 ) : (
                                     <>

@@ -25,8 +25,9 @@ export default function QrEnterPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    const restaurantId = searchParams.get('restaurant');
-    const tableId = searchParams.get('table');
+    const restaurantId = searchParams.get('restaurant') || searchParams.get('restaurantId');
+    const tableId = searchParams.get('table') || searchParams.get('tableId');
+    const token = searchParams.get('token') || searchParams.get('qrToken');
 
     if (!restaurantId || !tableId) {
       setStatus('error');
@@ -43,37 +44,45 @@ export default function QrEnterPage() {
         if (!isMounted) return;
 
         const resolvedName = data.restaurantName || 'Silver Sapoon';
-        setRestaurantName(resolvedName);
-        setTableNumber(tableId);
+        const cleanNum = tableId.replace(/^(t-|table-)/i, '').toUpperCase();
+        const paddedNum = cleanNum.length === 1 ? `0${cleanNum}` : cleanNum;
 
-        // Store session
+        setRestaurantName(resolvedName);
+        setTableNumber(paddedNum);
+
+        // Store authoritative session
         setSession({
           restaurantId,
           tableId,
-          tableNumber: tableId.replace(/^t-|^table-/, '').toUpperCase(),
+          tableNumber: paddedNum,
           restaurantName: resolvedName,
+          qrToken: token || undefined,
         });
 
         setStatus('success');
 
         // Automatically redirect to menu after 1.5 seconds
         setTimeout(() => {
-          router.push('/');
+          router.push('/menu');
         }, 1500);
       })
       .catch((err) => {
         console.error('QR verification failed:', err);
         if (isMounted) {
+          const cleanNum = tableId.replace(/^(t-|table-)/i, '').toUpperCase();
+          const paddedNum = cleanNum.length === 1 ? `0${cleanNum}` : cleanNum;
+
           // Fallback to local session
           setSession({
             restaurantId,
             tableId,
-            tableNumber: tableId,
+            tableNumber: paddedNum,
             restaurantName: 'Silver Sapoon',
+            qrToken: token || undefined,
           });
           setStatus('success');
           setTimeout(() => {
-            router.push('/');
+            router.push('/menu');
           }, 1200);
         }
       });
@@ -129,7 +138,7 @@ export default function QrEnterPage() {
 
             <button
               type="button"
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/menu')}
               className="w-full flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] text-xs font-black text-black shadow-lg transition hover:brightness-105"
             >
               <span>Explore Menu Now</span>
@@ -155,7 +164,7 @@ export default function QrEnterPage() {
 
             <button
               type="button"
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/menu')}
               className="w-full flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-color)] text-xs font-bold text-[var(--text-primary)] hover:border-[var(--accent-gold)]/30 hover:text-[var(--accent-gold)] transition"
             >
               <Utensils className="w-4 h-4" />

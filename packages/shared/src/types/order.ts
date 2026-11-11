@@ -50,6 +50,9 @@ export interface CustomerOrderRequest {
   tableId: string;
   branchId?: string;
   customerPhone?: string;
+  customerName?: string;
+  customerNote?: string;
+  orderNotes?: string;
   loyaltyAccountId?: string;
   rewardCode?: string;
   promoCode?: string;

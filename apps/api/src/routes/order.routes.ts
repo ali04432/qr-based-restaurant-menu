@@ -31,10 +31,13 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   }
 
   const {
-    restaurantId,
+    restaurantId: rawRestaurantId,
     tableId,
     branchId,
+    customerName,
     customerPhone,
+    customerNote,
+    orderNotes,
     loyaltyAccountId: providedLoyaltyId,
     rewardCode,
     promoCode,
@@ -43,20 +46,47 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   } = parsed.data;
 
   try {
+    // 1. Authoritative Restaurant Resolution (supports UUID, slug, or single-tenant default)
+    let restaurant = rawRestaurantId
+      ? await prisma.restaurant.findFirst({
+          where: {
+            OR: [{ id: rawRestaurantId }, { slug: rawRestaurantId }],
+          },
+        })
+      : null;
+
+    if (!restaurant) {
+      restaurant = await prisma.restaurant.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    if (!restaurant) {
+      return next(new AppError('The specified restaurant does not exist.', 404, 'RESTAURANT_NOT_FOUND'));
+    }
+
+    const restaurantId = restaurant.id;
     const menuItemIds = items.map((i) => i.menuItemId);
 
     const TAX_RATE = 0.08; // 8%
     const SERVICE_CHARGE = 5.0; // flat 5.00
 
-    // Validate table existence (supports UUID, tableNumber, or qrToken)
+    // 2. Multi-format Table Resolution
+    const trimmedTable = String(tableId).trim();
+    const strippedTable = trimmedTable.replace(/^(t-|table-)/i, '');
+    const paddedTable = strippedTable.padStart(2, '0');
+    const unpaddedTable = strippedTable.replace(/^0+/, '') || strippedTable;
+
     const table = await prisma.table.findFirst({
       where: {
         restaurantId,
         OR: [
-          { id: tableId },
-          { tableNumber: tableId },
-          { qrToken: tableId },
-          { tableNumber: tableId.replace(/^t-/, '') },
+          { id: trimmedTable },
+          { tableNumber: trimmedTable },
+          { tableNumber: strippedTable },
+          { tableNumber: paddedTable },
+          { tableNumber: unpaddedTable },
+          { qrToken: trimmedTable },
         ],
       },
     });
@@ -223,6 +253,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           total,
           paymentMethod: paymentMethod ?? 'ONLINE',
           paymentStatus: 'PENDING',
+          customerNote: [customerName ? `Customer: ${customerName}` : '', customerNote || orderNotes || ''].filter(Boolean).join(' | ') || null,
           items: {
             create: orderItemsData,
           },
