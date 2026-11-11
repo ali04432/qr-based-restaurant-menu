@@ -259,7 +259,7 @@ export default function CheckoutPage() {
                     const historyEntry = {
                         id: order.id,
                         restaurantId: order.restaurantId,
-                        tableNumber: order.tableNumber || tableNumber || '07',
+                        tableNumber: order.tableNumber || tableNumber || '--',
                         total: order.total || grandTotal,
                         itemsCount: itemCount,
                         items: cart.map((i) => ({
@@ -438,13 +438,15 @@ export default function CheckoutPage() {
                                     Back to Menu
                                 </Link>
 
-                                <Link
-                                    href="/enter?restaurant=b27cc519-73e3-400a-97c0-9c516907adb4&table=07"
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] px-3.5 py-1.5 text-xs font-black text-black hover:brightness-105 transition"
-                                >
-                                    <QrCode className="h-3.5 w-3.5" />
-                                    Connect Table 07
-                                </Link>
+                                {process.env.NEXT_PUBLIC_ENABLE_DEV_TABLE_FALLBACK === 'true' && (
+                                    <Link
+                                        href="/enter?restaurant=silver-sapoon&table=07"
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[var(--accent-gold)] to-[var(--accent-orange)] px-3.5 py-1.5 text-xs font-black text-black hover:brightness-105 transition"
+                                    >
+                                        <QrCode className="h-3.5 w-3.5" />
+                                        Dev: Connect Table 07
+                                    </Link>
+                                )}
                             </div>
                         </div>
                     </div>

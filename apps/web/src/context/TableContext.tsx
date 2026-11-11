@@ -148,8 +148,8 @@ function TableProviderInner({ children }: { children: ReactNode }) {
             const authoritativeTableId = result.table.id;
             const authoritativeTableNum = result.table.tableNumber;
             const resId = result.restaurant?.id || effectiveRestaurant;
-            const resSlug = result.restaurant?.slug || 'silver-sapoon';
-            const resName = result.restaurant?.name || 'Silver Sapoon';
+            const resSlug = result.restaurant?.slug || null;
+            const resName = result.restaurant?.name || null;
 
             setRestaurantId(resId);
             setRestaurantSlug(resSlug);
@@ -162,16 +162,17 @@ function TableProviderInner({ children }: { children: ReactNode }) {
 
             if (typeof window !== 'undefined') {
               localStorage.setItem('qr_restaurantId', resId);
-              localStorage.setItem('qr_restaurantSlug', resSlug);
+              if (resSlug) localStorage.setItem('qr_restaurantSlug', resSlug);
               localStorage.setItem('qr_tableId', authoritativeTableId);
               localStorage.setItem('qr_tableNumber', authoritativeTableNum);
-              localStorage.setItem('qr_restaurantName', resName);
+              if (resName) localStorage.setItem('qr_restaurantName', resName);
             }
+          } else {
+            setIsTableVerified(false);
           }
         } catch (err) {
-          console.warn('[TableContext] Could not validate table against API, using fallback:', err);
-          setIsTableVerified(true);
-          setWelcomeNotice(`Seated at Table ${initialTableNum}.`);
+          console.warn('[TableContext] Could not validate table against API:', err);
+          setIsTableVerified(false);
         } finally {
           setIsLoading(false);
         }
@@ -189,35 +190,53 @@ function TableProviderInner({ children }: { children: ReactNode }) {
       if (storedRestaurant && (storedTableId || storedTable)) {
         const cleanTable = storedTable ? (storedTable.length === 1 ? `0${storedTable}` : storedTable) : (storedTableId || null);
         setRestaurantId(storedRestaurant);
-        setRestaurantSlug(storedSlug || 'silver-sapoon');
+        setRestaurantSlug(storedSlug || null);
         setTableId(storedTableId || storedTable);
         setTableNumber(cleanTable);
-        setRestaurantName(storedName || 'Silver Sapoon');
+        setRestaurantName(storedName || null);
         setQrToken(storedToken);
         setIsTableVerified(true);
         setIsLoading(false);
       } else {
-        // Fallback: Resolve active restaurant identity so restaurantId is never null for browsing
-        const resolveDefaultRestaurant = async () => {
-          try {
-            const res: any = await apiClient.get('/api/menu');
-            if (res && res.restaurant) {
-              setRestaurantId(res.restaurant.id);
-              setRestaurantSlug(res.restaurant.slug || 'silver-sapoon');
-              setRestaurantName(res.restaurant.name || 'Silver Sapoon');
-              if (res.table) {
-                setTableId(res.table.id);
-                setTableNumber(res.table.tableNumber);
-                setIsTableVerified(true);
+        // Enforce strict multi-tenant QR integrity:
+        // A customer must NEVER be assigned to a restaurant or table in production without scanning a valid QR code.
+        // Default test data is only permitted through an explicitly enabled development-only configuration, never in production.
+        const isDev = process.env.NODE_ENV === 'development';
+        const enableDevFallback = process.env.NEXT_PUBLIC_ENABLE_DEV_TABLE_FALLBACK === 'true';
+
+        if (isDev && enableDevFallback) {
+          const resolveDevDefaultRestaurant = async () => {
+            try {
+              const res: any = await apiClient.get('/api/menu');
+              if (res && res.restaurant) {
+                setRestaurantId(res.restaurant.id);
+                setRestaurantSlug(res.restaurant.slug || null);
+                setRestaurantName(res.restaurant.name || null);
+                if (res.table) {
+                  setTableId(res.table.id);
+                  setTableNumber(res.table.tableNumber);
+                  setIsTableVerified(true);
+                }
               }
+            } catch (e) {
+              // Ignore dev fallback errors
+            } finally {
+              setIsLoading(false);
             }
-          } catch (e) {
-            // Keep current state
-          } finally {
-            setIsLoading(false);
-          }
-        };
-        resolveDefaultRestaurant();
+          };
+          resolveDevDefaultRestaurant();
+        } else {
+          // Production / Standard mode: Keep session unassigned until a valid QR code is scanned
+          setRestaurantId(null);
+          setRestaurantSlug(null);
+          setTableId(null);
+          setTableNumber(null);
+          setRestaurantName(null);
+          setQrToken(null);
+          setIsTableVerified(false);
+          setTableStatus(null);
+          setIsLoading(false);
+        }
       }
     } else {
       setIsLoading(false);

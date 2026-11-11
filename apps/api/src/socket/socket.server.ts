@@ -6,6 +6,7 @@ import { registerSocketHandlers } from './handlers';
 
 // ============================================================
 // Socket.io Server Setup
+// Multi-Tenant Isolated Architecture
 // ============================================================
 
 let io: SocketServer | null = null;
@@ -25,15 +26,13 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
   });
 
   // ── Optional JWT authentication for socket connections
-  // Unauthenticated connections are allowed in Phase 1.
-  // In Phase 2+, enforce auth for staff namespaces.
   io.use((socket: Socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
 
     if (token) {
       const payload = verifyToken(token);
       if (payload) {
-        // Attach user context to socket data for use in handlers
+        // Attach user context to socket data for tenant authorization
         socket.data.user = payload;
         socket.data.restaurantId = payload.restaurantId;
       }
@@ -45,28 +44,74 @@ export function initSocketServer(httpServer: HttpServer): SocketServer {
 
   io.on('connection', (socket: Socket) => {
     // If the client provides a restaurantId in handshake query or auth, join the restaurant room
-    const restaurantId =
-      socket.data.restaurantId ?? (socket.handshake.query.restaurantId as string | undefined);
+    const requestedRestaurantId =
+      (socket.handshake.query.restaurantId as string | undefined) ?? socket.data.restaurantId;
 
-    if (restaurantId) {
-      const room = `restaurant:${restaurantId}`;
+    if (requestedRestaurantId) {
+      // Enforce tenant authorization: Authenticated staff can only join their assigned restaurant (unless SUPER_ADMIN)
+      if (socket.data.user && socket.data.restaurantId && socket.data.user.role !== 'SUPER_ADMIN') {
+        if (socket.data.restaurantId !== requestedRestaurantId) {
+          console.warn(
+            `[Socket Security] Blocked client ${socket.id} (user ${socket.data.user.id}) from joining unauthorized restaurant: ${requestedRestaurantId}`
+          );
+          return;
+        }
+      }
+
+      const room = `restaurant:${requestedRestaurantId}`;
       void socket.join(room);
-      console.log(`[Socket] ${socket.id} joined room ${room}`);
+      console.log(`[Socket] ${socket.id} joined tenant room ${room}`);
     }
 
-    // Also listen for explicit join events
+    // Also listen for explicit join:restaurant events with tenant boundary check
     socket.on('join:restaurant', (rId: string) => {
-      if (rId) {
-        const room = `restaurant:${rId}`;
-        void socket.join(room);
-        console.log(`[Socket] ${socket.id} joined room via event: ${room}`);
+      if (!rId) return;
+
+      if (socket.data.user && socket.data.restaurantId && socket.data.user.role !== 'SUPER_ADMIN') {
+        if (socket.data.restaurantId !== rId) {
+          console.warn(
+            `[Socket Security] Blocked client ${socket.id} from unauthorized join:restaurant for ${rId}`
+          );
+          return;
+        }
       }
+
+      const room = `restaurant:${rId}`;
+      void socket.join(room);
+      console.log(`[Socket] ${socket.id} joined tenant room via event: ${room}`);
+    });
+
+    // Support room:join for clients using that convention with multi-tenant enforcement
+    socket.on('room:join', (payload: { room: string } | string) => {
+      const room = typeof payload === 'string' ? payload : payload?.room;
+      if (!room) return;
+
+      if (room.startsWith('restaurant:')) {
+        const targetId = room.replace('restaurant:', '');
+        if (socket.data.user && socket.data.restaurantId && socket.data.user.role !== 'SUPER_ADMIN') {
+          if (socket.data.restaurantId !== targetId) {
+            console.warn(
+              `[Socket Security] Blocked client ${socket.id} from unauthorized room:join for ${room}`
+            );
+            return;
+          }
+        }
+      } else if (room === 'orders' || room === 'global') {
+        // Reject global unisolated orders room joins to prevent cross-tenant exposure
+        console.warn(
+          `[Socket Security] Blocked client ${socket.id} from joining global room '${room}' to preserve tenant isolation.`
+        );
+        return;
+      }
+
+      void socket.join(room);
+      console.log(`[Socket] ${socket.id} joined room ${room}`);
     });
 
     registerSocketHandlers(socket);
   });
 
-  console.log('[Socket.io] Server initialized');
+  console.log('[Socket.io] Server initialized with multi-tenant isolation');
   return io;
 }
 
@@ -82,7 +127,8 @@ export function getSocketServer(): SocketServer {
 }
 
 /**
- * Emit an event to all clients in a specific restaurant's room and broadcast to all connected clients.
+ * Emit an event to all authorized clients in a specific restaurant's room.
+ * Strictly enforces tenant isolation: NEVER broadcasts to global namespace or cross-restaurant rooms.
  */
 export function emitToRestaurant(
   restaurantId: string,
@@ -90,8 +136,6 @@ export function emitToRestaurant(
   data: unknown
 ): void {
   const server = getSocketServer();
-  // Emit to targeted restaurant room
+  // Strictly emit to the isolated restaurant room only
   server.to(`restaurant:${restaurantId}`).emit(event, data);
-  // Also emit globally so KDS screens listening on the main namespace receive it instantly
-  server.emit(event, data);
 }
