@@ -201,11 +201,11 @@ model User {
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   // Relations
-  restaurant      Restaurant?      @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
-  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  staffActionLogs StaffActionLog[]
-  auditLogs       AuditLog[]
-  processedPayments Payment[]        @relation("ProcessedPayments")
+  restaurant        Restaurant?       @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  branch            Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  staffActionLogs   StaffActionLog[]
+  auditLogs         AuditLog[]
+  processedPayments Payment[]         @relation("ProcessedPayments")
   paymentRefunds    PaymentRefund[]
   assignedRequests  CustomerRequest[] @relation("AssignedRequests")
   orderEvents       OrderEvent[]
@@ -229,9 +229,9 @@ model Table {
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
   // Relations
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  orders     Order[]
+  restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch           Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  orders           Order[]
   customerRequests CustomerRequest[]
 
   @@unique([restaurantId, tableNumber])
@@ -267,28 +267,28 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id                String   @id @default(uuid())
-  restaurantId      String   @map("restaurant_id")
-  categoryId        String   @map("category_id")
-  name              String   @db.VarChar(200)
-  description       String?  @db.Text
+  id                String  @id @default(uuid())
+  restaurantId      String  @map("restaurant_id")
+  categoryId        String  @map("category_id")
+  name              String  @db.VarChar(200)
+  description       String? @db.Text
   image             String?
   price             Float
-  costPrice         Float?   @map("cost_price")
-  stockCount        Int?     @map("stock_count") // Null means unlimited
-  lowStockThreshold Int?     @default(10) @map("low_stock_threshold")
-  isAvailable       Boolean  @default(true) @map("is_available")
-  isFeatured        Boolean  @default(false) @map("is_featured")
-  isPopular         Boolean  @default(false) @map("is_popular")
+  costPrice         Float?  @map("cost_price")
+  stockCount        Int?    @map("stock_count") // Null means unlimited
+  lowStockThreshold Int?    @default(10) @map("low_stock_threshold")
+  isAvailable       Boolean @default(true) @map("is_available")
+  isFeatured        Boolean @default(false) @map("is_featured")
+  isPopular         Boolean @default(false) @map("is_popular")
   rating            Float?
-  
-  prepTimeMin       Int?     @default(10) @map("prep_time_min")
-  prepTimeMax       Int?     @default(20) @map("prep_time_max")
-  badge             String?
-  tags              String[]
 
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  prepTimeMin Int?     @default(10) @map("prep_time_min")
+  prepTimeMax Int?     @default(20) @map("prep_time_max")
+  badge       String?
+  tags        String[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   restaurant        Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -309,34 +309,34 @@ model MenuItem {
 // ============================================================
 
 model Order {
-  id                  String         @id @default(uuid())
-  restaurantId        String         @map("restaurant_id")
-  branchId            String?        @map("branch_id")
-  tableId             String         @map("table_id")
-  loyaltyAccountId    String?        @map("loyalty_account_id")
-  rewardRedemptionId  String?        @map("reward_redemption_id")
-  orderNumber         String         @map("order_number") @db.VarChar(50)
-  status              String         @default("PENDING")
-  
-  subtotal            Float
-  tax                 Float          @default(0)
-  discount            Float          @default(0)
-  serviceCharge       Float          @default(0) @map("service_charge")
-  deliveryFee         Float          @default(0) @map("delivery_fee")
-  total               Float
-  
-  paymentStatus       String         @default("PENDING") @map("payment_status")
-  paymentMethod       String         @default("CASH") @map("payment_method")
-  customerNote        String?        @map("customer_note")
-  
-  // Delivery Fleet Info
-  deliveryStatus      String         @default("UNASSIGNED") @map("delivery_status")
-  deliveryProviderRef String?        @map("delivery_provider_ref")
-  riderName           String?        @map("rider_name")
-  riderPhone          String?        @map("rider_phone")
+  id                 String  @id @default(uuid())
+  restaurantId       String  @map("restaurant_id")
+  branchId           String? @map("branch_id")
+  tableId            String  @map("table_id")
+  loyaltyAccountId   String? @map("loyalty_account_id")
+  rewardRedemptionId String? @map("reward_redemption_id")
+  orderNumber        String  @map("order_number") @db.VarChar(50)
+  status             String  @default("PENDING")
 
-  createdAt           DateTime       @default(now()) @map("created_at")
-  updatedAt           DateTime       @updatedAt @map("updated_at")
+  subtotal      Float
+  tax           Float @default(0)
+  discount      Float @default(0)
+  serviceCharge Float @default(0) @map("service_charge")
+  deliveryFee   Float @default(0) @map("delivery_fee")
+  total         Float
+
+  paymentStatus String  @default("PENDING") @map("payment_status")
+  paymentMethod String  @default("CASH") @map("payment_method")
+  customerNote  String? @map("customer_note")
+
+  // Delivery Fleet Info
+  deliveryStatus      String  @default("UNASSIGNED") @map("delivery_status")
+  deliveryProviderRef String? @map("delivery_provider_ref")
+  riderName           String? @map("rider_name")
+  riderPhone          String? @map("rider_phone")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -358,19 +358,19 @@ model Order {
 }
 
 model OrderItem {
-  id                  String   @id @default(uuid())
-  orderId             String   @map("order_id")
-  menuItemId          String   @map("menu_item_id")
-  
-  name                String   @db.VarChar(200) // Snapshot at time of order
-  quantity            Int
-  unitPrice           Float    @map("unit_price")
-  costPriceAtOrder    Float?   @map("cost_price_at_order")
-  subtotal            Float
-  
-  specialInstructions String?  @map("special_instructions")
+  id         String @id @default(uuid())
+  orderId    String @map("order_id")
+  menuItemId String @map("menu_item_id")
 
-  createdAt           DateTime @default(now()) @map("created_at")
+  name             String @db.VarChar(200) // Snapshot at time of order
+  quantity         Int
+  unitPrice        Float  @map("unit_price")
+  costPriceAtOrder Float? @map("cost_price_at_order")
+  subtotal         Float
+
+  specialInstructions String? @map("special_instructions")
+
+  createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
   order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -382,20 +382,20 @@ model OrderItem {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
-  restaurantId   String        @map("restaurant_id")
-  orderId        String        @map("order_id")
-  method         String        @default("CASH")
+  id             String    @id @default(uuid())
+  restaurantId   String    @map("restaurant_id")
+  orderId        String    @map("order_id")
+  method         String    @default("CASH")
   amount         Float
-  status         String        @default("PENDING")
-  receivedAmount Float?        @map("received_amount")
-  changeAmount   Float?        @map("change_amount")
-  notes          String?       @db.Text
-  transactionRef String?       @map("transaction_ref")
-  paidAt         DateTime?     @map("paid_at")
-  processedById  String?       @map("processed_by_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  status         String    @default("PENDING")
+  receivedAmount Float?    @map("received_amount")
+  changeAmount   Float?    @map("change_amount")
+  notes          String?   @db.Text
+  transactionRef String?   @map("transaction_ref")
+  paidAt         DateTime? @map("paid_at")
+  processedById  String?   @map("processed_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relations
   restaurant  Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -410,19 +410,19 @@ model Payment {
 }
 
 model PaymentRefund {
-  id           String     @id @default(uuid())
-  restaurantId String     @map("restaurant_id")
-  paymentId    String     @map("payment_id")
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  paymentId    String   @map("payment_id")
   amount       Float
-  reason       String     @db.Text
-  staffId      String     @map("staff_id")
-  method       String     @default("CASH")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  reason       String   @db.Text
+  staffId      String   @map("staff_id")
+  method       String   @default("CASH")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  payment      Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  staff        User       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  payment    Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  staff      User       @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@index([paymentId])
@@ -442,9 +442,9 @@ model CustomerRequest {
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   // Relations
-  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  table        Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
-  assignedTo   User?         @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  assignedTo User?      @relation("AssignedRequests", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([tableId])
@@ -553,14 +553,14 @@ model LoyaltyAccount {
 }
 
 model LoyaltyTransaction {
-  id               String          @id @default(uuid())
-  restaurantId     String          @map("restaurant_id")
-  loyaltyAccountId String?         @map("loyalty_account_id")
-  customerId       String?         @map("customer_id")
-  orderId          String?         @map("order_id")
+  id               String   @id @default(uuid())
+  restaurantId     String   @map("restaurant_id")
+  loyaltyAccountId String?  @map("loyalty_account_id")
+  customerId       String?  @map("customer_id")
+  orderId          String?  @map("order_id")
   points           Int
   description      String?
-  createdAt        DateTime        @default(now()) @map("created_at")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   // Relations
   restaurant     Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -672,17 +672,17 @@ model AuditLog {
 // ============================================================
 
 model Feedback {
-  id           String     @id @default(uuid())
-  restaurantId String     @map("restaurant_id")
-  orderId      String?    @map("order_id")
-  tableNumber  String?    @map("table_number")
-  customerName String?    @map("customer_name")
-  rating       Int        @default(5)
-  comment      String?    @db.Text
-  createdAt    DateTime   @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  orderId      String?  @map("order_id")
+  tableNumber  String?  @map("table_number")
+  customerName String?  @map("customer_name")
+  rating       Int      @default(5)
+  comment      String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  order        Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([orderId])
@@ -701,19 +701,19 @@ model Promotion {
   categoryIds      String[]      @map("category_ids")
   menuItemIds      String[]      @map("menu_item_ids")
   isFirstOrderOnly Boolean       @default(false) @map("is_first_order_only")
-  
+
   // Buy X Get Y (BOGO)
-  buyQuantity      Int?          @default(0) @map("buy_quantity")
-  getQuantity      Int?          @default(0) @map("get_quantity")
-  getMenuItemId    String?       @map("get_menu_item_id")
+  buyQuantity   Int?    @default(0) @map("buy_quantity")
+  getQuantity   Int?    @default(0) @map("get_quantity")
+  getMenuItemId String? @map("get_menu_item_id")
 
-  startDate        DateTime?     @map("start_date")
-  endDate          DateTime?     @map("end_date")
-  isActive         Boolean       @default(true) @map("is_active")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
-  restaurant       Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@unique([restaurantId, code])
   @@index([restaurantId])
@@ -721,16 +721,16 @@ model Promotion {
 }
 
 model Notification {
-  id           String     @id @default(uuid())
-  restaurantId String     @map("restaurant_id")
-  type         String     @default("INFO") // ORDER | STOCK | PAYMENT | FEEDBACK | SYSTEM | LOYALTY | DELIVERY
-  title        String     @db.VarChar(150)
-  message      String     @db.Text
-  link         String?    @db.VarChar(255)
-  isRead       Boolean    @default(false) @map("is_read")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  type         String   @default("INFO") // ORDER | STOCK | PAYMENT | FEEDBACK | SYSTEM | LOYALTY | DELIVERY
+  title        String   @db.VarChar(150)
+  message      String   @db.Text
+  link         String?  @db.VarChar(255)
+  isRead       Boolean  @default(false) @map("is_read")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@index([isRead])
@@ -742,23 +742,23 @@ model Notification {
 // ============================================================
 
 model SubscriptionPlan {
-  id                    String               @id @default(uuid())
-  tier                  SubscriptionPlanTier @unique
-  name                  String               @db.VarChar(100)
-  priceMonthly          Float                @map("price_monthly")
-  priceYearly           Float                @map("price_yearly")
-  maxStaff              Int                  @map("max_staff")
-  maxTables             Int                  @map("max_tables")
-  maxBranches           Int                  @map("max_branches")
-  maxOrdersPerMonth     Int                  @map("max_orders_per_month")
-  hasAiFeatures         Boolean              @default(false) @map("has_ai_features")
-  hasAdvancedAnalytics  Boolean              @default(false) @map("has_advanced_analytics")
-  hasIntegrations       Boolean              @default(false) @map("has_integrations")
-  hasCustomBranding     Boolean              @default(false) @map("has_custom_branding")
-  createdAt             DateTime             @default(now()) @map("created_at")
-  updatedAt             DateTime             @updatedAt @map("updated_at")
+  id                   String               @id @default(uuid())
+  tier                 SubscriptionPlanTier @unique
+  name                 String               @db.VarChar(100)
+  priceMonthly         Float                @map("price_monthly")
+  priceYearly          Float                @map("price_yearly")
+  maxStaff             Int                  @map("max_staff")
+  maxTables            Int                  @map("max_tables")
+  maxBranches          Int                  @map("max_branches")
+  maxOrdersPerMonth    Int                  @map("max_orders_per_month")
+  hasAiFeatures        Boolean              @default(false) @map("has_ai_features")
+  hasAdvancedAnalytics Boolean              @default(false) @map("has_advanced_analytics")
+  hasIntegrations      Boolean              @default(false) @map("has_integrations")
+  hasCustomBranding    Boolean              @default(false) @map("has_custom_branding")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
 
-  subscriptions         Subscription[]
+  subscriptions Subscription[]
 
   @@map("subscription_plans")
 }
@@ -776,8 +776,8 @@ model Subscription {
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
   // Relations
-  restaurant   Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  plan         SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
 
   @@index([restaurantId])
   @@index([planId])
@@ -801,7 +801,7 @@ model ScheduledReport {
   createdAt    DateTime        @default(now()) @map("created_at")
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
-  restaurant   Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@map("scheduled_reports")
@@ -822,25 +822,30 @@ model BackgroundJobLog {
   completedAt  DateTime? @map("completed_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  idempotencyKey String?   @unique @map("idempotency_key")
+  lockedAt       DateTime? @map("locked_at")
+  lockedBy       String?   @map("locked_by")
+
   @@index([restaurantId])
   @@index([status])
   @@index([jobType])
+  @@index([status, scheduledFor])
   @@map("background_job_logs")
 }
 
 model IntegrationConfig {
-  id           String       @id @default(uuid())
-  restaurantId String       @map("restaurant_id")
-  providerType String       @map("provider_type")
-  providerName String       @map("provider_name") @db.VarChar(100)
-  isEnabled    Boolean      @default(false) @map("is_enabled")
-  configJson   String       @default("{}") @map("config_json") @db.Text
-  lastTestedAt DateTime?    @map("last_tested_at")
-  lastStatus   String?      @default("UNCONFIGURED") @map("last_status")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  restaurantId String    @map("restaurant_id")
+  providerType String    @map("provider_type")
+  providerName String    @map("provider_name") @db.VarChar(100)
+  isEnabled    Boolean   @default(false) @map("is_enabled")
+  configJson   String    @default("{}") @map("config_json") @db.Text
+  lastTestedAt DateTime? @map("last_tested_at")
+  lastStatus   String?   @default("UNCONFIGURED") @map("last_status")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@unique([restaurantId, providerType])
   @@index([restaurantId])
@@ -911,21 +916,21 @@ model VisualizationEvent {
 // ============================================================
 
 model Event {
-  id           String    @id @default(uuid())
-  restaurantId String    @map("restaurant_id")
-  branchId     String?   @map("branch_id")
-  name         String    @db.VarChar(150)
-  description  String?   @db.Text
-  eventType    String    @default("GENERAL") @map("event_type") // e.g. HAPPY_HOUR, PROMOTION, PRIVATE_PARTY, MAINTENANCE
-  startDate    DateTime  @map("start_date")
-  endDate      DateTime  @map("end_date")
-  isActive     Boolean   @default(true) @map("is_active")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  branchId     String?  @map("branch_id")
+  name         String   @db.VarChar(150)
+  description  String?  @db.Text
+  eventType    String   @default("GENERAL") @map("event_type") // e.g. HAPPY_HOUR, PROMOTION, PRIVATE_PARTY, MAINTENANCE
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([branchId])
@@ -934,24 +939,23 @@ model Event {
 }
 
 model OrderEvent {
-  id           String    @id @default(uuid())
-  restaurantId String    @map("restaurant_id")
-  orderId      String    @map("order_id")
-  userId       String?   @map("user_id") // Nullable for automated/system-triggered events
-  statusFrom   String?   @map("status_from") @db.VarChar(50) // The order status before this event
-  statusTo     String    @map("status_to") @db.VarChar(50)   // The order status after this event
-  eventType    String    @default("STATE_CHANGE") @map("event_type") // STATE_CHANGE, PAYMENT_UPDATE, NOTE_ADDED
-  metadata     String?   @db.Text // JSON string for extra info (e.g. refund reason, payment ref)
-  createdAt    DateTime  @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  orderId      String   @map("order_id")
+  userId       String?  @map("user_id") // Nullable for automated/system-triggered events
+  statusFrom   String?  @map("status_from") @db.VarChar(50) // The order status before this event
+  statusTo     String   @map("status_to") @db.VarChar(50) // The order status after this event
+  eventType    String   @default("STATE_CHANGE") @map("event_type") // STATE_CHANGE, PAYMENT_UPDATE, NOTE_ADDED
+  metadata     String?  @db.Text // JSON string for extra info (e.g. refund reason, payment ref)
+  createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  order        Order      @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId])
   @@index([orderId])
   @@index([createdAt])
   @@map("order_events")
 }
-
