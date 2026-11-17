@@ -174,11 +174,10 @@ export default function MarkerArModal({
         {/* Live Tracking Status Badge Overlay */}
         <div className="pointer-events-none absolute top-4 left-4 z-20">
           <div
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold backdrop-blur-md shadow-lg transition-all ${
-              markerDetected
-                ? 'border border-emerald-500/40 bg-emerald-950/80 text-emerald-300'
-                : 'border border-amber-500/40 bg-slate-900/80 text-amber-300'
-            }`}
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold backdrop-blur-md shadow-lg transition-all ${markerDetected
+              ? 'border border-emerald-500/40 bg-emerald-950/80 text-emerald-300'
+              : 'border border-amber-500/40 bg-slate-900/80 text-amber-300'
+              }`}
           >
             {markerDetected ? (
               <>
