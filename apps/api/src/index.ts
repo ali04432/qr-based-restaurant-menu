@@ -39,10 +39,10 @@ async function bootstrap(): Promise<void> {
     jobQueue.start();
   });
 
-  // ── Graceful shutdown
+  // ── Graceful shutdownss
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\n[${signal}] Shutting down gracefully...`);
-    jobQueue.stop();
+   await jobQueue.stop();
     httpServer.close(async () => {
       await prisma.$disconnect();
       console.log('[Server] Closed. Goodbye.');

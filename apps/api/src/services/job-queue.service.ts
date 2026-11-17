@@ -1,18 +1,6 @@
-/**
- * Background Job Queue Service (REQ-16)
- * ─────────────────────────────────────
- * In-process async job queue with:
- *   - Durable logging to BackgroundJobLog in Postgres
- *   - Retry + exponential backoff (up to maxRetries)
- *   - Idempotency via job type + payload hash
- *   - Handler registry for pluggable job types
- */
 
+import { randomUUID } from 'crypto';
 import { prisma } from '../config/database';
-
-// ──────────────────────────────────────────────────────────
-// Types
-// ──────────────────────────────────────────────────────────
 
 export type JobType =
   | 'SCHEDULED_REPORT_DISPATCH'
@@ -29,6 +17,7 @@ export interface EnqueueOptions {
   payload: Record<string, unknown>;
   scheduledFor?: Date;
   maxRetries?: number;
+  idempotencyKey?: string;
 }
 
 export interface JobResult {
@@ -37,79 +26,73 @@ export interface JobResult {
   error?: string;
 }
 
-type JobHandler = (payload: Record<string, unknown>, restaurantId?: string) => Promise<JobResult>;
+type JobHandler = (
+  payload: Record<string, unknown>,
+  restaurantId?: string
+) => Promise<JobResult>;
 
-// ──────────────────────────────────────────────────────────
-// Handler registry
-// ──────────────────────────────────────────────────────────
 const handlers = new Map<string, JobHandler>();
 
-export function registerJobHandler(jobType: JobType, handler: JobHandler): void {
+export function registerJobHandler(
+  jobType: JobType,
+  handler: JobHandler
+): void {
   handlers.set(jobType, handler);
 }
 
-// ──────────────────────────────────────────────────────────
-// Default handlers (stubs – real integrations call services)
-// ──────────────────────────────────────────────────────────
+// Default handlers. External integrations must be connected
+// before these handlers can be considered production-ready.
 
 registerJobHandler('SCHEDULED_REPORT_DISPATCH', async (payload, restaurantId) => {
-  const { reportType, recipients, format } = payload as Record<string, string>;
-  // In production this would generate CSV/PDF and send via email/WhatsApp.
-  // Here we log and simulate success.
-  console.log(`[JobQueue] Dispatching ${format} ${reportType} report to ${recipients} for restaurant ${restaurantId}`);
+  const { reportType, recipients, format } = payload;
+  console.log(`[JobQueue] Report dispatch: ${reportType}, ${recipients}, ${restaurantId}`);
   return {
     success: true,
-    output: {
-      dispatched: true,
-      reportType,
-      recipients,
-      format,
-      timestamp: new Date().toISOString(),
-    },
+    output: { dispatched: true, reportType, recipients, format, timestamp: new Date().toISOString() },
   };
 });
 
-registerJobHandler('LOYALTY_POINTS_ACCRUE', async (payload, restaurantId) => {
-  const { orderId, customerId, points } = payload as Record<string, string | number>;
-  console.log(`[JobQueue] Accruing ${points} loyalty points for customer ${customerId} (order ${orderId})`);
+registerJobHandler('LOYALTY_POINTS_ACCRUE', async (payload) => {
+  const { orderId, customerId, points } = payload;
+  console.log(`[JobQueue] Loyalty points: ${points}, customer: ${customerId}`);
   return { success: true, output: { orderId, customerId, points } };
 });
 
-registerJobHandler('INVENTORY_REORDER_ALERT', async (payload, restaurantId) => {
-  const { itemId, itemName, currentStock } = payload as Record<string, string | number>;
-  console.log(`[JobQueue] Reorder alert for ${itemName} (stock: ${currentStock})`);
+registerJobHandler('INVENTORY_REORDER_ALERT', async (payload) => {
+  const { itemId, itemName, currentStock } = payload;
+  console.log(`[JobQueue] Inventory alert: ${itemName}, stock: ${currentStock}`);
   return { success: true, output: { itemId, itemName, currentStock } };
 });
 
-registerJobHandler('INVOICE_EMAIL', async (payload, restaurantId) => {
-  const { orderId, email } = payload as Record<string, string>;
-  console.log(`[JobQueue] Sending invoice email for order ${orderId} to ${email}`);
+registerJobHandler('INVOICE_EMAIL', async (payload) => {
+  const { orderId, email } = payload;
+  console.log(`[JobQueue] Invoice email: ${orderId}, ${email}`);
   return { success: true, output: { orderId, email } };
 });
 
-registerJobHandler('WHATSAPP_NOTIFICATION', async (payload, restaurantId) => {
-  const { to, templateName } = payload as Record<string, string>;
-  console.log(`[JobQueue] Sending WhatsApp ${templateName} notification to ${to}`);
+registerJobHandler('WHATSAPP_NOTIFICATION', async (payload) => {
+  const { to, templateName } = payload;
+  console.log(`[JobQueue] WhatsApp notification: ${to}, ${templateName}`);
   return { success: true, output: { to, templateName } };
 });
 
-registerJobHandler('SMS_NOTIFICATION', async (payload, restaurantId) => {
-  const { to, message } = payload as Record<string, string>;
-  console.log(`[JobQueue] Sending SMS to ${to}`);
+registerJobHandler('SMS_NOTIFICATION', async (payload) => {
+  const { to, message } = payload;
+  console.log(`[JobQueue] SMS notification: ${to}`);
   return { success: true, output: { to, message } };
 });
 
-/**
- * AI_INSIGHT_REFRESH — Pre-compute all three passive AI pillars for a restaurant.
- * Triggered on a schedule so the /ai/dashboard endpoint returns near-instant results.
- * The job itself does not cache yet — caching can be layered on top via Redis later.
- */
 registerJobHandler('AI_INSIGHT_REFRESH', async (payload, restaurantId) => {
   const rid = (payload.restaurantId as string) || restaurantId;
-  if (!rid) return { success: false, error: 'restaurantId required for AI_INSIGHT_REFRESH' };
+  if (!rid) {
+    return { success: false, error: 'restaurantId required for AI_INSIGHT_REFRESH' };
+  }
 
-  // Lazy import to avoid circular dependency at module load time
-  const { runOperationsPillar, runAnalyticsPillar, runOptimizationPillar } = await import('./ai/ai.service');
+  const {
+    runOperationsPillar,
+    runAnalyticsPillar,
+    runOptimizationPillar,
+  } = await import('./ai/ai.service');
 
   const [operations, analytics, optimization] = await Promise.all([
     runOperationsPillar(rid),
@@ -117,32 +100,48 @@ registerJobHandler('AI_INSIGHT_REFRESH', async (payload, restaurantId) => {
     runOptimizationPillar(rid),
   ]);
 
-  console.log(`[JobQueue] AI_INSIGHT_REFRESH completed for restaurant ${rid} — ` +
-    `ops:${operations.confidence} analytics:${analytics.confidence} opt:${optimization.confidence}`);
-
   return {
     success: true,
     output: {
       restaurantId: rid,
-      operations: { confidence: operations.confidence, recommendations: operations.recommendations?.length ?? 0 },
-      analytics: { confidence: analytics.confidence, recommendations: analytics.recommendations?.length ?? 0 },
-      optimization: { confidence: optimization.confidence, recommendations: optimization.recommendations?.length ?? 0 },
+      operations: {
+        confidence: operations.confidence,
+        recommendations: operations.recommendations?.length ?? 0,
+      },
+      analytics: {
+        confidence: analytics.confidence,
+        recommendations: analytics.recommendations?.length ?? 0,
+      },
+      optimization: {
+        confidence: optimization.confidence,
+        recommendations: optimization.recommendations?.length ?? 0,
+      },
       generatedAt: new Date().toISOString(),
     },
   };
 });
 
-// ──────────────────────────────────────────────────────────
-// Job Queue Class
-// ──────────────────────────────────────────────────────────
 class JobQueueService {
-  private isRunning = false;
-  private pollIntervalMs = 5000; // 5 seconds
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly workerId = randomUUID();
+  private readonly pollIntervalMs = 5000;
+  private readonly heartbeatIntervalMs = 60_000;
 
-  /**
-   * Enqueue a job for async execution
-   */
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private isPolling = false;
+  private stopping = false;
+  private activeTasks = new Set<Promise<void>>();
+
+  private track(task: Promise<void>): void {
+    this.activeTasks.add(task);
+    void task.then(
+      () => this.activeTasks.delete(task),
+      (error) => {
+        console.error('[JobQueue] Background task error:', error);
+        this.activeTasks.delete(task);
+      }
+    );
+  }
+
   async enqueue(options: EnqueueOptions): Promise<{ id: string }> {
     const {
       restaurantId,
@@ -150,153 +149,270 @@ class JobQueueService {
       payload,
       scheduledFor = new Date(),
       maxRetries = 3,
+      idempotencyKey,
     } = options;
 
-    const job = await prisma.backgroundJobLog.create({
-      data: {
-        restaurantId: restaurantId || null,
-        jobType,
-        status: 'PENDING',
-        payload: JSON.stringify(payload),
-        scheduledFor,
-        maxRetries,
-      },
-    });
-
-    // If scheduled for now (or past), process immediately in background
-    if (scheduledFor <= new Date()) {
-      setImmediate(() => this.processJob(job.id));
+    if (!Number.isInteger(maxRetries) || maxRetries < 0) {
+      throw new Error('maxRetries must be a non-negative integer');
     }
 
-    return { id: job.id };
-  }
-
-  /**
-   * Process a single job by ID
-   */
-  private async processJob(jobId: string): Promise<void> {
-    let job;
     try {
-      job = await prisma.backgroundJobLog.findUnique({ where: { id: jobId } });
-      if (!job || job.status !== 'PENDING') return;
-
-      // Mark as RUNNING
-      await prisma.backgroundJobLog.update({
-        where: { id: jobId },
-        data: { status: 'RUNNING', startedAt: new Date() },
+      const job = await prisma.backgroundJobLog.create({
+        data: {
+          restaurantId: restaurantId || null,
+          jobType,
+          status: 'PENDING',
+          payload: JSON.stringify(payload),
+          scheduledFor,
+          maxRetries,
+          idempotencyKey: idempotencyKey || null,
+        },
       });
 
-      const handler = handlers.get(job.jobType);
+      if (scheduledFor <= new Date()) {
+        this.track(this.processJob(job.id));
+      }
+
+      return { id: job.id };
+    } catch (error) {
+      if (
+        idempotencyKey &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
+        const existing = await prisma.backgroundJobLog.findUnique({
+          where: { idempotencyKey },
+          select: { id: true },
+        });
+
+        if (existing) return { id: existing.id };
+      }
+
+      throw error;
+    }
+  }
+
+  // PostgreSQL atomically claims one due job.
+  // SKIP LOCKED prevents concurrent workers claiming the same row.
+  private async claimJob(jobId?: string): Promise<string | null> {
+    const rows = jobId
+      ? await prisma.$queryRaw<Array<{ id: string }>>`
+          WITH candidate AS (
+            SELECT id
+            FROM background_job_logs
+            WHERE id = ${jobId}
+              AND status = 'PENDING'
+              AND scheduled_for <= NOW()
+            FOR UPDATE SKIP LOCKED
+          )
+          UPDATE background_job_logs AS job
+          SET status = 'RUNNING',
+              started_at = NOW(),
+              locked_at = NOW(),
+              locked_by = ${this.workerId}
+          FROM candidate
+          WHERE job.id = candidate.id
+          RETURNING job.id
+        `
+      : await prisma.$queryRaw<Array<{ id: string }>>`
+          WITH candidate AS (
+            SELECT id
+            FROM background_job_logs
+            WHERE status = 'PENDING'
+              AND scheduled_for <= NOW()
+            ORDER BY scheduled_for ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+          )
+          UPDATE background_job_logs AS job
+          SET status = 'RUNNING',
+              started_at = NOW(),
+              locked_at = NOW(),
+              locked_by = ${this.workerId}
+          FROM candidate
+          WHERE job.id = candidate.id
+          RETURNING job.id
+        `;
+
+    return rows[0]?.id ?? null;
+  }
+
+  private async processJob(jobId: string): Promise<void> {
+    try {
+      const claimedId = await this.claimJob(jobId);
+      if (!claimedId) return;
+
+      await this.executeClaimedJob(claimedId);
+    } catch (error) {
+      console.error(`[JobQueue] Could not process job ${jobId}:`, error);
+    }
+  }
+
+  private async executeClaimedJob(jobId: string): Promise<void> {
+    const job = await prisma.backgroundJobLog.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job || job.status !== 'RUNNING' || job.lockedBy !== this.workerId) {
+      return;
+    }
+
+    const handler = handlers.get(job.jobType);
+
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+    try {
       if (!handler) {
         throw new Error(`No handler registered for job type: ${job.jobType}`);
       }
 
-      const payload = job.payload ? JSON.parse(job.payload) : {};
+      // Renew this worker's lease while the handler is executing.
+      heartbeat = setInterval(() => {
+        void prisma.backgroundJobLog.updateMany({
+          where: {
+            id: jobId,
+            status: 'RUNNING',
+            lockedBy: this.workerId,
+          },
+          data: { lockedAt: new Date() },
+        }).catch((error) => {
+          console.error(`[JobQueue] Heartbeat failed for ${jobId}:`, error);
+        });
+      }, this.heartbeatIntervalMs);
+
+      const payload = job.payload
+        ? JSON.parse(job.payload) as Record<string, unknown>
+        : {};
+
       const result = await handler(payload, job.restaurantId || undefined);
 
-      if (result.success) {
-        await prisma.backgroundJobLog.update({
-          where: { id: jobId },
-          data: {
-            status: 'COMPLETED',
-            completedAt: new Date(),
-            result: JSON.stringify(result.output),
-          },
-        });
-      } else {
+      if (!result.success) {
         throw new Error(result.error || 'Job handler returned failure');
       }
-    } catch (err: any) {
-      if (!job) return;
 
+      const completed = await prisma.backgroundJobLog.updateMany({
+        where: {
+          id: jobId,
+          status: 'RUNNING',
+          lockedBy: this.workerId,
+        },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          result: JSON.stringify(result.output ?? null),
+          error: null,
+          lockedAt: null,
+          lockedBy: null,
+        },
+      });
+
+      if (completed.count === 0) {
+        console.warn(`[JobQueue] Job ${jobId} completion skipped: lock no longer owned`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       const newRetries = job.retries + 1;
-      const shouldRetry = newRetries < job.maxRetries;
+      const shouldRetry = newRetries <= job.maxRetries;
 
       if (shouldRetry) {
-        // Exponential backoff: 30s * 2^retries
-        const backoffMs = 30_000 * Math.pow(2, job.retries);
-        const nextRun = new Date(Date.now() + backoffMs);
+        const backoffMs = Math.min(
+          30_000 * Math.pow(2, job.retries),
+          30 * 60 * 1000
+        );
 
-        await prisma.backgroundJobLog.update({
-          where: { id: jobId },
+        await prisma.backgroundJobLog.updateMany({
+          where: {
+            id: jobId,
+            status: 'RUNNING',
+            lockedBy: this.workerId,
+          },
           data: {
             status: 'PENDING',
             retries: newRetries,
-            error: err.message,
-            scheduledFor: nextRun,
+            error: message,
+            scheduledFor: new Date(Date.now() + backoffMs),
+            startedAt: null,
+            lockedAt: null,
+            lockedBy: null,
           },
         });
 
-        // Schedule retry
-        setTimeout(() => this.processJob(jobId), backoffMs);
+        console.error(`[JobQueue] Job ${jobId} failed; retry ${newRetries}/${job.maxRetries}`);
       } else {
-        // Max retries exceeded — mark FAILED
-        await prisma.backgroundJobLog.update({
-          where: { id: jobId },
+        await prisma.backgroundJobLog.updateMany({
+          where: {
+            id: jobId,
+            status: 'RUNNING',
+            lockedBy: this.workerId,
+          },
           data: {
             status: 'FAILED',
-            completedAt: new Date(),
             retries: newRetries,
-            error: err.message,
+            error: message,
+            completedAt: new Date(),
+            lockedAt: null,
+            lockedBy: null,
           },
         });
-      }
 
-      console.error(`[JobQueue] Job ${jobId} (${job.jobType}) failed: ${err.message}`);
+        console.error(`[JobQueue] Job ${jobId} permanently failed: ${message}`);
+      }
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
   }
 
-  /**
-   * Poll for due pending jobs (runs in background)
-   */
   private async processDueJobs(): Promise<void> {
-    if (this.isRunning) return;
-    this.isRunning = true;
+    if (this.isPolling || this.stopping) return;
+
+    this.isPolling = true;
 
     try {
-      const dueJobs = await prisma.backgroundJobLog.findMany({
-        where: {
-          status: 'PENDING',
-          scheduledFor: { lte: new Date() },
-        },
-        take: 20,
-        orderBy: { scheduledFor: 'asc' },
-      });
+      // Claim one job at a time so waiting jobs do not hold stale locks.
+      for (let i = 0; i < 20 && !this.stopping; i++) {
+        const jobId = await this.claimJob();
+        if (!jobId) break;
 
-      for (const job of dueJobs) {
-        await this.processJob(job.id);
+        await this.executeClaimedJob(jobId);
       }
-    } catch (err) {
-      console.error('[JobQueue] Error during poll cycle:', err);
+    } catch (error) {
+      console.error('[JobQueue] Poll cycle failed:', error);
     } finally {
-      this.isRunning = false;
+      this.isPolling = false;
     }
   }
 
-  /**
-   * Start background polling
-   */
   start(): void {
     if (this.pollTimer) return;
-    console.log(`[JobQueue] Starting background job queue (poll every ${this.pollIntervalMs}ms)`);
-    this.pollTimer = setInterval(() => this.processDueJobs(), this.pollIntervalMs);
-    // Initial poll on startup
-    setTimeout(() => this.processDueJobs(), 1000);
+
+    this.stopping = false;
+
+    console.log(
+      `[JobQueue] Worker ${this.workerId} started; polling every ${this.pollIntervalMs}ms`
+    );
+
+    this.track(this.processDueJobs());
+
+    this.pollTimer = setInterval(() => {
+      this.track(this.processDueJobs());
+    }, this.pollIntervalMs);
   }
 
-  /**
-   * Stop background polling
-   */
-  stop(): void {
+  async stop(): Promise<void> {
+    this.stopping = true;
+
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+
+    // Wait for already-running work to finish before shutdown.
+    while (this.activeTasks.size > 0) {
+      await Promise.allSettled([...this.activeTasks]);
+    }
+
+    console.log('[JobQueue] Worker stopped gracefully');
   }
 
-  /**
-   * Get queue stats
-   */
   async getStats(restaurantId?: string): Promise<{
     pending: number;
     running: number;
@@ -307,10 +423,18 @@ class JobQueueService {
     const baseWhere = restaurantId ? { restaurantId } : {};
 
     const [pending, running, completed, failed, recentJobs] = await Promise.all([
-      prisma.backgroundJobLog.count({ where: { ...baseWhere, status: 'PENDING' } }),
-      prisma.backgroundJobLog.count({ where: { ...baseWhere, status: 'RUNNING' } }),
-      prisma.backgroundJobLog.count({ where: { ...baseWhere, status: 'COMPLETED' } }),
-      prisma.backgroundJobLog.count({ where: { ...baseWhere, status: 'FAILED' } }),
+      prisma.backgroundJobLog.count({
+        where: { ...baseWhere, status: 'PENDING' },
+      }),
+      prisma.backgroundJobLog.count({
+        where: { ...baseWhere, status: 'RUNNING' },
+      }),
+      prisma.backgroundJobLog.count({
+        where: { ...baseWhere, status: 'COMPLETED' },
+      }),
+      prisma.backgroundJobLog.count({
+        where: { ...baseWhere, status: 'FAILED' },
+      }),
       prisma.backgroundJobLog.findMany({
         where: baseWhere,
         orderBy: { createdAt: 'desc' },
@@ -334,5 +458,4 @@ class JobQueueService {
   }
 }
 
-// Singleton export
 export const jobQueue = new JobQueueService();
