@@ -39,7 +39,7 @@ async function bootstrap(): Promise<void> {
     jobQueue.start();
   });
 
-  // ── Graceful shutdownss
+  // ── Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`\n[${signal}] Shutting down gracefully...`);
    await jobQueue.stop();
