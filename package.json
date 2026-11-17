@@ -27,9 +27,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "lucide-react": "^1.34.0"
-  },
-  "devDependencies": {
+    "lucide-react": "^1.34.0",
     "prisma": "^5.22.0"
   },
   "allowScripts": {
