@@ -1,12 +1,8 @@
-
 import { Router, Response, NextFunction } from 'express';
 import { prisma } from '../../config/database';
 import { sendSuccess, sendCreated } from '../../utils/api-response';
 import { AppError } from '../../middleware/error.middleware';
-import {
-  authMiddleware,
-  AuthenticatedRequest,
-} from '../../middleware/auth.middleware';
+import { authMiddleware, AuthenticatedRequest } from '../../middleware/auth.middleware';
 import { requireRole } from '../../middleware/role.middleware';
 import { UserRole } from '@qr-menu/shared';
 import { jobQueue, JobType } from '../../services/job-queue.service';
@@ -28,15 +24,9 @@ router.get(
           ? (req.query.restaurantId as string) || req.user?.restaurantId
           : req.user?.restaurantId;
 
-      const {
-        status,
-        jobType,
-        limit = '50',
-        offset = '0',
-      } = req.query as Record<string, string>;
+      const { status, jobType, limit = '50', offset = '0' } = req.query as Record<string, string>;
 
       const where: any = {};
-
       if (restaurantId) where.restaurantId = restaurantId;
       if (status) where.status = status;
       if (jobType) where.jobType = jobType;
@@ -45,18 +35,13 @@ router.get(
         prisma.backgroundJobLog.findMany({
           where,
           orderBy: { createdAt: 'desc' },
-          take: parseInt(limit, 10),
-          skip: parseInt(offset, 10),
+          take: parseInt(limit),
+          skip: parseInt(offset),
         }),
         prisma.backgroundJobLog.count({ where }),
       ]);
 
-      return sendSuccess(res, {
-        jobs,
-        total,
-        limit: parseInt(limit, 10),
-        offset: parseInt(offset, 10),
-      });
+      return sendSuccess(res, { jobs, total, limit: parseInt(limit), offset: parseInt(offset) });
     } catch (err) {
       return next(err);
     }
@@ -79,7 +64,6 @@ router.get(
           : req.user?.restaurantId;
 
       const stats = await jobQueue.getStats(restaurantId || undefined);
-
       return sendSuccess(res, stats);
     } catch (err) {
       return next(err);
@@ -89,7 +73,7 @@ router.get(
 
 /**
  * POST /api/admin/jobs
- * Manually enqueue a background job.
+ * Manually enqueue a background job (admin tool for testing/retries).
  */
 router.post(
   '/',
@@ -102,12 +86,7 @@ router.post(
           ? (req.body.restaurantId as string) || req.user?.restaurantId
           : req.user?.restaurantId;
 
-      const {
-        jobType,
-        payload = {},
-        scheduledFor,
-        maxRetries = 3,
-      } = req.body;
+      const { jobType, payload = {}, scheduledFor, maxRetries = 3 } = req.body;
 
       const validJobTypes: JobType[] = [
         'SCHEDULED_REPORT_DISPATCH',
@@ -119,29 +98,18 @@ router.post(
       ];
 
       if (!jobType || !validJobTypes.includes(jobType)) {
-        return next(
-          new AppError(
-            `jobType must be one of: ${validJobTypes.join(', ')}`,
-            400,
-            'VALIDATION_ERROR'
-          )
-        );
+        return next(new AppError(`jobType must be one of: ${validJobTypes.join(', ')}`, 400, 'VALIDATION_ERROR'));
       }
 
       const job = await jobQueue.enqueue({
         restaurantId: restaurantId || undefined,
         jobType,
         payload,
-        scheduledFor: scheduledFor
-          ? new Date(scheduledFor)
-          : new Date(),
+        scheduledFor: scheduledFor ? new Date(scheduledFor) : new Date(),
         maxRetries,
       });
 
-      return sendCreated(res, {
-        jobId: job.id,
-        message: 'Job enqueued successfully',
-      });
+      return sendCreated(res, { jobId: job.id, message: 'Job enqueued successfully' });
     } catch (err) {
       return next(err);
     }
@@ -150,10 +118,7 @@ router.post(
 
 /**
  * POST /api/admin/jobs/:id/retry
- * Retry an existing FAILED job.
- *
- * Important:
- * Reuses the existing job instead of creating a duplicate job.
+ * Retry a FAILED job by resetting it to PENDING.
  */
 router.post(
   '/:id/retry',
@@ -161,48 +126,18 @@ router.post(
   requireRole(UserRole.SUPER_ADMIN, UserRole.ADMIN),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const isSuperAdmin =
-        req.user?.role === UserRole.SUPER_ADMIN;
-
-      const job = await prisma.backgroundJobLog.findUnique({
-        where: { id: req.params.id },
-      });
+      const job = await prisma.backgroundJobLog.findUnique({ where: { id: req.params.id } });
 
       if (!job) {
-        return next(
-          new AppError('Job not found', 404, 'NOT_FOUND')
-        );
-      }
-
-      // Prevent restaurant admins from retrying another restaurant's jobs.
-      if (
-        !isSuperAdmin &&
-        job.restaurantId !== req.user?.restaurantId
-      ) {
-        return next(
-          new AppError('Job not found', 404, 'NOT_FOUND')
-        );
+        return next(new AppError('Job not found', 404, 'NOT_FOUND'));
       }
 
       if (job.status !== 'FAILED') {
-        return next(
-          new AppError(
-            'Only FAILED jobs can be retried',
-            400,
-            'VALIDATION_ERROR'
-          )
-        );
+        return next(new AppError('Only FAILED jobs can be retried', 400, 'VALIDATION_ERROR'));
       }
 
-      // Atomic update prevents two admins from retrying the same job.
-      const updated = await prisma.backgroundJobLog.updateMany({
-        where: {
-          id: req.params.id,
-          status: 'FAILED',
-          ...(!isSuperAdmin && {
-            restaurantId: req.user?.restaurantId,
-          }),
-        },
+      const updated = await prisma.backgroundJobLog.update({
+        where: { id: req.params.id },
         data: {
           status: 'PENDING',
           retries: 0,
@@ -210,28 +145,24 @@ router.post(
           scheduledFor: new Date(),
           startedAt: null,
           completedAt: null,
-          lockedAt: null,
-          lockedBy: null,
         },
       });
 
-      if (updated.count === 0) {
-        return next(
-          new AppError(
-            'Job status changed. Refresh and try again.',
-            409,
-            'CONFLICT'
-          )
-        );
-      }
-
-      // The existing queue worker will pick up this PENDING job.
-      // No second enqueue is necessary.
-
-      return sendSuccess(res, {
-        message: 'Job reset to PENDING for retry',
-        jobId: req.params.id,
+      // Process immediately
+      setImmediate(async () => {
+        const freshJob = await prisma.backgroundJobLog.findUnique({ where: { id: updated.id } });
+        if (freshJob) {
+          // Re-enqueue through internal mechanism
+          await jobQueue.enqueue({
+            restaurantId: freshJob.restaurantId || undefined,
+            jobType: freshJob.jobType as JobType,
+            payload: freshJob.payload ? JSON.parse(freshJob.payload) : {},
+            scheduledFor: new Date(),
+          });
+        }
       });
+
+      return sendSuccess(res, { message: 'Job reset to PENDING for retry', jobId: req.params.id });
     } catch (err) {
       return next(err);
     }
@@ -253,23 +184,15 @@ router.delete(
           ? (req.query.restaurantId as string) || req.user?.restaurantId
           : req.user?.restaurantId;
 
-      const { olderThanDays = '7' } =
-        req.query as Record<string, string>;
-
+      const { olderThanDays = '7' } = req.query as Record<string, string>;
       const cutoff = new Date();
-      cutoff.setDate(
-        cutoff.getDate() - parseInt(olderThanDays, 10)
-      );
+      cutoff.setDate(cutoff.getDate() - parseInt(olderThanDays));
 
       const deleted = await prisma.backgroundJobLog.deleteMany({
         where: {
           ...(restaurantId && { restaurantId }),
-          status: {
-            in: ['COMPLETED', 'FAILED'],
-          },
-          createdAt: {
-            lt: cutoff,
-          },
+          status: { in: ['COMPLETED', 'FAILED'] },
+          createdAt: { lt: cutoff },
         },
       });
 

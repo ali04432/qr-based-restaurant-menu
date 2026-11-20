@@ -1,11 +1,10 @@
-
 import { PrismaClient } from '@prisma/client';
 import { env } from './env';
 
 // ============================================================
 // Prisma Client Singleton
-// Reuse one instance during development hot reloads.
-// Keep database warnings and errors visible.
+// In development, we reuse a single instance across hot reloads
+// to avoid exhausting the PostgreSQL connection pool.
 // ============================================================
 
 declare global {
@@ -15,7 +14,10 @@ declare global {
 
 function createPrismaClient(): PrismaClient {
   return new PrismaClient({
-    log: ['warn', 'error'],
+    log:
+      env.NODE_ENV === 'development'
+        ? ['query', 'warn', 'error']
+        : ['warn', 'error'],
   });
 }
 
