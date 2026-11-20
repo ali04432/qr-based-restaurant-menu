@@ -5,7 +5,7 @@ import 'dotenv/config';
 import http from 'http';
 import { env } from './config/env';
 import { createApp } from './app';
-import { initSocketServer } from './socket/socket.server';
+import { initSocketServer, closeSocketServer } from './socket/socket.server';
 import { prisma } from './config/database';
 import { jobQueue } from './services/job-queue.service';
 
@@ -40,14 +40,43 @@ async function bootstrap(): Promise<void> {
   });
 
   // ── Graceful shutdown
+  let isShuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     console.log(`\n[${signal}] Shutting down gracefully...`);
-   await jobQueue.stop();
-    httpServer.close(async () => {
+
+    // Safety timeout to prevent hanging on open connections
+    const forceExitTimer = setTimeout(() => {
+      console.warn('[Server] Force shutdown timeout reached after 10s. Exiting.');
+      process.exit(1);
+    }, 10000);
+    forceExitTimer.unref();
+
+    try {
+      // 1. Stop background worker polling & wait for in-flight tasks
+      await jobQueue.stop();
+
+      // 2. Close Socket.io server & connected sockets
+      await closeSocketServer();
+
+      // 3. Stop accepting new HTTP requests & close server
+      await new Promise<void>((resolve) => {
+        httpServer.close((err) => {
+          if (err) console.error('[Server] Error closing HTTP server:', err);
+          resolve();
+        });
+      });
+
+      // 4. Disconnect Prisma client
       await prisma.$disconnect();
-      console.log('[Server] Closed. Goodbye.');
+      console.log('[Server] Disconnected database. Goodbye.');
+      clearTimeout(forceExitTimer);
       process.exit(0);
-    });
+    } catch (err) {
+      console.error('[Server] Error during graceful shutdown:', err);
+      process.exit(1);
+    }
   };
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));

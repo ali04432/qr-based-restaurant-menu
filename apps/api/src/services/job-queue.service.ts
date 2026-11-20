@@ -138,12 +138,15 @@ registerJobHandler('AI_INSIGHT_REFRESH', async (payload, restaurantId) => {
 
 class JobQueueService {
   private readonly workerId = randomUUID();
-  private readonly pollIntervalMs = 5000;
+  private readonly idleBackoffSteps = [5000, 10000, 20000, 30000];
+  private currentBackoffIndex = 0;
   private readonly heartbeatIntervalMs = 60_000;
+  private readonly staleRecoveryIntervalMs = 180_000; // 3 minutes
 
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: NodeJS.Timeout | null = null;
   private isPolling = false;
   private stopping = false;
+  private lastStaleRecoveryTime = 0;
   private activeTasks = new Set<Promise<void>>();
 
   private track(task: Promise<void>): void {
@@ -156,6 +159,19 @@ class JobQueueService {
         this.activeTasks.delete(task);
       }
     );
+  }
+
+  private scheduleNextPoll(delayMs?: number): void {
+    if (this.stopping) return;
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+
+    const delay = delayMs ?? this.idleBackoffSteps[this.currentBackoffIndex];
+    this.pollTimer = setTimeout(() => {
+      this.track(this.processDueJobs());
+    }, delay);
   }
 
   async enqueue(options: EnqueueOptions): Promise<{ id: string }> {
@@ -186,7 +202,9 @@ class JobQueueService {
       });
 
       if (scheduledFor <= new Date()) {
-        this.track(this.processJob(job.id));
+        // Reset backoff and trigger immediate polling cycle
+        this.currentBackoffIndex = 0;
+        this.scheduleNextPoll(50);
       }
 
       return { id: job.id };
@@ -423,22 +441,46 @@ class JobQueueService {
     if (this.isPolling || this.stopping) return;
 
     this.isPolling = true;
+    let processedAnyJob = false;
 
     try {
-      // Recover abandoned jobs before processing new work.
-      await this.recoverStaleJobs();
+      // Periodically recover abandoned jobs (every 3 minutes instead of every polling cycle)
+      const now = Date.now();
+      if (now - this.lastStaleRecoveryTime >= this.staleRecoveryIntervalMs) {
+        this.lastStaleRecoveryTime = now;
+        await this.recoverStaleJobs();
+      }
 
       // Claim one job at a time so waiting jobs do not hold stale locks.
       for (let i = 0; i < 20 && !this.stopping; i++) {
         const jobId = await this.claimJob();
         if (!jobId) break;
 
+        processedAnyJob = true;
         await this.executeClaimedJob(jobId);
+      }
+
+      // Dynamic backoff: reset to 0 if jobs were processed, otherwise back off
+      if (processedAnyJob) {
+        this.currentBackoffIndex = 0;
+      } else {
+        this.currentBackoffIndex = Math.min(
+          this.currentBackoffIndex + 1,
+          this.idleBackoffSteps.length - 1
+        );
       }
     } catch (error) {
       console.error('[JobQueue] Poll cycle failed:', error);
+      // Back off on error to avoid hammering database under connection stress
+      this.currentBackoffIndex = Math.min(
+        this.currentBackoffIndex + 1,
+        this.idleBackoffSteps.length - 1
+      );
     } finally {
       this.isPolling = false;
+      if (!this.stopping) {
+        this.scheduleNextPoll();
+      }
     }
   }
 
@@ -446,29 +488,28 @@ class JobQueueService {
     if (this.pollTimer) return;
 
     this.stopping = false;
+    this.currentBackoffIndex = 0;
 
     console.log(
-      `[JobQueue] Worker ${this.workerId} started; polling every ${this.pollIntervalMs}ms`
+      `[JobQueue] Worker ${this.workerId} started; idle backoff [${this.idleBackoffSteps.map(s => s / 1000 + 's').join(', ')}]`
     );
 
-    this.track(this.processDueJobs());
-
-    this.pollTimer = setInterval(() => {
-      this.track(this.processDueJobs());
-    }, this.pollIntervalMs);
+    this.scheduleNextPoll(100);
   }
 
   async stop(): Promise<void> {
     this.stopping = true;
 
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
 
-    // Wait for already-running work to finish before shutdown.
-    while (this.activeTasks.size > 0) {
-      await Promise.allSettled([...this.activeTasks]);
+    // Wait up to 5 seconds for already-running work to finish before forced shutdown
+    if (this.activeTasks.size > 0) {
+      const waitPromise = Promise.allSettled([...this.activeTasks]);
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 5000));
+      await Promise.race([waitPromise, timeoutPromise]);
     }
 
     console.log('[JobQueue] Worker stopped gracefully');

@@ -139,3 +139,19 @@ export function emitToRestaurant(
   // Strictly emit to the isolated restaurant room only
   server.to(`restaurant:${restaurantId}`).emit(event, data);
 }
+
+/**
+ * Cleanly close the Socket.io server during graceful shutdown.
+ */
+export async function closeSocketServer(): Promise<void> {
+  if (io) {
+    try {
+      io.close();
+      console.log('[Socket.io] Server closed cleanly');
+    } catch (err) {
+      console.warn('[Socket.io] Error closing socket server:', err);
+    } finally {
+      io = null;
+    }
+  }
+}
