@@ -1,4 +1,4 @@
-import { prisma } from '../../config/database';
+import { prisma, withDbRetry } from '../../config/database';
 import { hashPassword, comparePassword } from './password.service';
 import { signToken } from './jwt.service';
 import { AppError, errors } from '../../middleware/error.middleware';
@@ -56,9 +56,12 @@ export async function registerUser(input: CreateUserInput): Promise<SafeUser> {
  * Returns an AuthResponse containing the safe user and a signed JWT.
  */
 export async function loginUser(input: LoginInput): Promise<AuthResponse> {
-  const user = await prisma.user.findUnique({
-    where: { email: input.email },
-  });
+  const user = await withDbRetry(
+    () => prisma.user.findUnique({
+      where: { email: input.email },
+    }),
+    { opName: 'loginUserLookup' }
+  );
 
   if (!user) {
     // Use a generic message to avoid user enumeration attacks
