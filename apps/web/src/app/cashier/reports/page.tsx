@@ -11,20 +11,26 @@ import {
   Smartphone,
   Landmark,
   Layers,
-  RefreshCw,
   Printer,
-  Calendar,
-  ShieldCheck,
-  AlertTriangle,
   CheckCircle2,
-  PieChart,
+  Clock,
+  AlertCircle,
+  Calculator,
   ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react';
-import { Phase5Layout } from '../../../components/phase5/Phase5Layout';
+import { CashierShell } from '../../../components/cashier/CashierShell';
+import { StatCard } from '../../../components/cashier/StatCard';
+import { PillTabs } from '../../../components/cashier/PillTabs';
+import { EmptyState } from '../../../components/cashier/EmptyState';
 import { useAuthContext } from '../../../context/AuthContext';
 import { cashierService } from '../../../services/cashier.service';
 import { PaymentMethodDistribution, CashierSummary } from '@qr-menu/shared';
+
+const RANGE_TABS = [
+  { id: 'today', label: 'Today' },
+  { id: 'week', label: 'This Week' },
+  { id: 'month', label: 'This Month' },
+];
 
 export default function CashierReportsPage() {
   const { user, token } = useAuthContext();
@@ -35,18 +41,37 @@ export default function CashierReportsPage() {
   const [distribution, setDistribution] = useState<PaymentMethodDistribution[]>([]);
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
   const [totalTransactions, setTotalTransactions] = useState<number>(0);
+  const [range, setRange] = useState<'today' | 'week' | 'month'>('today');
 
   // Cash Drawer Balancing (Shift Float)
-  const [openingFloat, setOpeningFloat] = useState<number>(10000);
+  const [openingFloat] = useState<number>(10000);
   const [countedCash, setCountedCash] = useState<string>('');
 
   const fetchReportData = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
+
+      const now = new Date();
+      let startDate: string | undefined;
+      if (range === 'today') {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        startDate = d.toISOString();
+      } else if (range === 'week') {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        startDate = d.toISOString();
+      } else if (range === 'month') {
+        const d = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        startDate = d.toISOString();
+      }
+
       const [sumData, analyticsData] = await Promise.all([
         cashierService.getSummary(restaurantId, token),
-        cashierService.getPaymentMethodAnalytics({}, token),
+        cashierService.getPaymentMethodAnalytics(
+          { startDate, endDate: new Date().toISOString() },
+          token
+        ),
       ]);
 
       setSummary(sumData);
@@ -58,7 +83,7 @@ export default function CashierReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [restaurantId, token]);
+  }, [restaurantId, token, range]);
 
   useEffect(() => {
     fetchReportData();
@@ -71,293 +96,245 @@ export default function CashierReportsPage() {
   const hasCounted = countedCash.trim() !== '';
   const cashVariance = hasCounted ? parsedCountedCash - expectedClosingCash : 0;
 
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case 'CASH':
-        return <Banknote className="w-5 h-5 text-emerald-400" />;
-      case 'CARD':
-        return <CreditCard className="w-5 h-5 text-sky-400" />;
-      case 'JAZZCASH':
-        return <Smartphone className="w-5 h-5 text-rose-400" />;
-      case 'EASYPAISA':
-        return <Smartphone className="w-5 h-5 text-emerald-400" />;
-      case 'BANK_TRANSFER':
-        return <Landmark className="w-5 h-5 text-purple-400" />;
-      default:
-        return <Layers className="w-5 h-5 text-slate-400" />;
-    }
-  };
-
   const printShiftSummary = () => {
     window.print();
   };
 
-  return (
-    <Phase5Layout
-      role="CASHIER"
-      title="Register Reports & Shift Balancing"
-      subtitle="Comprehensive revenue breakdown, payment channel distributions, and cash-in-drawer reconciliation"
-      headerAction={
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={printShiftSummary}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-200 transition-all"
-          >
-            <Printer className="w-4 h-4 text-amber-400" />
-            <span>Print Shift Audit</span>
-          </button>
+  const getMethodIcon = (method: string) => {
+    switch (method) {
+      case 'CASH':
+        return <Banknote className="w-5 h-5 text-[#22C55E]" />;
+      case 'CARD':
+        return <CreditCard className="w-5 h-5 text-[#22D3EE]" />;
+      case 'JAZZCASH':
+      case 'EASYPAISA':
+        return <Smartphone className="w-5 h-5 text-[#F5B342]" />;
+      case 'BANK_TRANSFER':
+        return <Landmark className="w-5 h-5 text-[#8B5CF6]" />;
+      default:
+        return <Layers className="w-5 h-5 text-[#A1A1AA]" />;
+    }
+  };
 
-          <button
-            onClick={fetchReportData}
-            disabled={loading}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all disabled:opacity-50"
-            title="Refresh analytics"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-400' : ''}`} />
-          </button>
-        </div>
+  const getMethodColor = (index: number) => {
+    const palette = ['#F5B342', '#22C55E', '#22D3EE', '#8B5CF6', '#F97316'];
+    return palette[index % palette.length];
+  };
+
+  return (
+    <CashierShell
+      title="Register Reports & Shift Balancing"
+      subtitle="Shift revenue breakdown, payment channel distributions, and cash-in-drawer reconciliation"
+      onRefresh={fetchReportData}
+      isRefreshing={loading}
+      headerAction={
+        <button
+          type="button"
+          onClick={printShiftSummary}
+          className="min-h-[44px] box-border px-3.5 rounded-[12px] border border-[#25282D] bg-[#15171A] hover:bg-[#1B1E23] hover:border-[#F5B342]/40 text-[#F8FAFC] flex items-center gap-2 text-xs font-semibold cursor-pointer transition-all"
+        >
+          <Printer className="w-4 h-4 text-[#F5B342]" strokeWidth={1.8} />
+          <span className="hidden sm:inline">Print Shift Audit</span>
+        </button>
       }
     >
-      <div className="space-y-6">
-        {/* Top Summary Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-2xl relative overflow-hidden flex flex-wrap items-center justify-between gap-6">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-          <div>
-            <span className="text-[11px] uppercase tracking-widest font-black text-amber-400 px-2.5 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
-              Shift Closing Audit
-            </span>
-            <h2 className="text-3xl font-black text-white mt-3 font-serif">
-              PKR {totalRevenue.toLocaleString()}
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Total register collections across {totalTransactions} settled transactions
-            </p>
+      {/* Range Pills Filter */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <PillTabs
+          tabs={RANGE_TABS}
+          activeTab={range}
+          onChange={(r) => setRange(r as any)}
+          ariaLabel="Report date range"
+        />
+        <div className="text-xs text-[#A1A1AA]">
+          Report Range: <span className="font-semibold text-[#F5B342] uppercase">{range}</span>
+        </div>
+      </div>
+
+      {/* 4 Stat Cards */}
+      <section aria-label="Shift audit KPIs" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="TOTAL COLLECTIONS"
+          value={`PKR ${totalRevenue.toLocaleString()}`}
+          sub={`Across ${totalTransactions} settled transactions`}
+          color="#F5B342"
+          tint="rgba(245,179,66,0.14)"
+          icon={<DollarSign className="w-5 h-5" strokeWidth={1.8} />}
+        />
+        <StatCard
+          label="PAID INVOICES"
+          value={summary?.paidOrders || 0}
+          sub="Successfully settled orders"
+          color="#22C55E"
+          tint="rgba(34,197,94,0.14)"
+          icon={<CheckCircle2 className="w-5 h-5" strokeWidth={1.8} />}
+        />
+        <StatCard
+          label="PENDING CHECKS"
+          value={summary?.pendingPayments || 0}
+          sub="Awaiting checkout settlement"
+          color="#F97316"
+          tint="rgba(249,115,22,0.14)"
+          icon={<Clock className="w-5 h-5" strokeWidth={1.8} />}
+        />
+        <StatCard
+          label="AVG TICKET VALUE"
+          value={`PKR ${((summary?.todaySales || 0) / Math.max(1, summary?.paidOrders || 1)).toFixed(0)}`}
+          sub="Revenue per settled guest check"
+          color="#22D3EE"
+          tint="rgba(34,211,238,0.14)"
+          icon={<TrendingUp className="w-5 h-5" strokeWidth={1.8} />}
+        />
+      </section>
+
+      {/* Two Column Layout: Payment Distribution (Left) & Shift Drawer Balancing (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Payment Channels Distribution Card */}
+        <div className="lg:col-span-7 bg-[#15171A] border border-[#25282D] rounded-[16px] p-5 flex flex-col gap-4 shadow-xl">
+          <div className="flex items-center justify-between pb-3 border-b border-[#25282D]">
+            <div>
+              <h3 className="text-sm font-bold text-[#F8FAFC]">Payment Method Distribution</h3>
+              <p className="text-[11px] text-[#A1A1AA]">Volume settled across channels</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-[#A1A1AA]">Total Volume</span>
+              <p className="text-sm font-bold text-[#F5B342] font-mono">
+                PKR {totalRevenue.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-center min-w-[130px]">
-              <p className="text-[10px] uppercase font-bold text-slate-400">Paid Invoices</p>
-              <h4 className="text-xl font-black text-emerald-400 mt-0.5">
-                {summary?.paidOrders || 0}
-              </h4>
+          {loading ? (
+            <div className="py-12 text-center text-xs text-[#A1A1AA]">
+              Loading payment channels...
             </div>
+          ) : distribution.length === 0 ? (
+            <EmptyState message="No payment transactions logged for this period." />
+          ) : (
+            <div className="flex flex-col gap-3.5">
+              {distribution.map((item, idx) => {
+                const pct = totalRevenue > 0 ? Math.round((item.amount / totalRevenue) * 100) : 0;
+                const barColor = getMethodColor(idx);
 
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-center min-w-[130px]">
-              <p className="text-[10px] uppercase font-bold text-slate-400">Pending Bills</p>
-              <h4 className="text-xl font-black text-amber-400 mt-0.5">
-                {summary?.pendingPayments || 0}
-              </h4>
-            </div>
+                return (
+                  <div
+                    key={item.method}
+                    className="p-3.5 rounded-[12px] bg-[#1B1E23] border border-[#25282D] flex flex-col gap-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-[8px] bg-[#0F1114] border border-[#25282D]">
+                          {getMethodIcon(item.method)}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-xs text-[#F8FAFC]">{item.method}</p>
+                          <p className="text-[10px] text-[#A1A1AA]">{item.count} orders settled</p>
+                        </div>
+                      </div>
 
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 text-center min-w-[130px]">
-              <p className="text-[10px] uppercase font-bold text-slate-400">Avg Ticket</p>
-              <h4 className="text-xl font-black text-sky-400 mt-0.5">
-                PKR {((summary?.todaySales || 0) / Math.max(1, summary?.paidOrders || 1)).toFixed(0)}
-              </h4>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-[#F8FAFC] font-mono">
+                          PKR {item.amount.toLocaleString()}
+                        </p>
+                        <p className="text-[10px] font-semibold text-[#F5B342]">{pct}% share</p>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-1.5 rounded-full bg-[#0F1114] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, backgroundColor: barColor }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* 2-Column Grid: Payment Method Distribution & Cash Float Reconciliation */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Payment Methods Distribution (7 cols) */}
-          <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-                  <PieChart className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Payment Method Distribution</h3>
-                  <p className="text-xs text-slate-400">
-                    Breakdown of revenue captured by payment gateway
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-mono text-slate-400">
-                {distribution.length} Channels Active
+        {/* Shift Cash Drawer Balancing Card */}
+        <div className="lg:col-span-5 bg-[#15171A] border border-[#25282D] rounded-[16px] p-5 flex flex-col gap-4 shadow-xl">
+          <div className="pb-3 border-b border-[#25282D] flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-[#F8FAFC]">Cash Drawer Balancing</h3>
+              <p className="text-[11px] text-[#A1A1AA]">Physical drawer cash audit</p>
+            </div>
+            <Calculator className="w-4 h-4 text-[#F5B342]" />
+          </div>
+
+          <div className="space-y-3.5">
+            {/* Opening Float */}
+            <div className="flex items-center justify-between p-3 rounded-[12px] bg-[#1B1E23] border border-[#25282D]">
+              <span className="text-xs text-[#A1A1AA]">Opening Float (Float In)</span>
+              <span className="font-mono font-bold text-[#F8FAFC] text-xs">
+                PKR {openingFloat.toLocaleString()}
               </span>
             </div>
 
-            {loading ? (
-              <div className="p-8 text-center text-slate-400">
-                <RefreshCw className="w-6 h-6 text-amber-500 animate-spin mx-auto mb-2" />
-                <span>Computing payment shares...</span>
-              </div>
-            ) : distribution.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">
-                <Receipt className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm font-bold text-slate-400">No Transactions Settled Today</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {distribution.map((item) => {
-                  const percentage =
-                    totalRevenue > 0
-                      ? Math.round((item.amount / totalRevenue) * 100)
-                      : 0;
+            {/* Total Cash Sales */}
+            <div className="flex items-center justify-between p-3 rounded-[12px] bg-[#1B1E23] border border-[#25282D]">
+              <span className="text-xs text-[#A1A1AA]">Register Cash Sales</span>
+              <span className="font-mono font-bold text-[#22C55E] text-xs">
+                + PKR {cashSales.toLocaleString()}
+              </span>
+            </div>
 
-                  return (
-                    <div
-                      key={item.method}
-                      className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3.5 space-y-2 hover:border-slate-700 transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                            {getMethodIcon(item.method)}
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                              {item.method.replace('_', ' ')}
-                            </h4>
-                            <p className="text-[11px] text-slate-400">
-                              {item.count} transaction{item.count !== 1 ? 's' : ''}
-                            </p>
-                          </div>
-                        </div>
+            {/* Expected Closing Cash */}
+            <div className="flex items-center justify-between p-3.5 rounded-[12px] bg-[rgba(245,179,66,0.08)] border border-[rgba(245,179,66,0.35)]">
+              <span className="text-xs font-bold text-[#F5B342] uppercase tracking-wider">
+                Expected Cash
+              </span>
+              <span className="font-mono font-bold text-[#F8FAFC] text-base">
+                PKR {expectedClosingCash.toLocaleString()}
+              </span>
+            </div>
 
-                        <div className="text-right">
-                          <p className="text-sm font-black text-white font-mono">
-                            PKR {item.amount.toLocaleString()}
-                          </p>
-                          <span className="text-xs font-bold text-amber-400 font-mono">
-                            {percentage}%
-                          </span>
-                        </div>
-                      </div>
+            {/* Counted Cash Input */}
+            <div>
+              <label className="block text-[11px] uppercase font-bold text-[#A1A1AA] mb-1.5">
+                Physical Cash Counted in Drawer (PKR)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={countedCash}
+                onChange={(e) => setCountedCash(e.target.value)}
+                placeholder="Enter physical drawer count..."
+                className="w-full box-border min-h-[48px] px-3.5 rounded-[10px] border border-[#25282D] bg-[#0F1114] text-[#F8FAFC] text-[16px] font-mono font-bold outline-none focus:border-[#F5B342]"
+              />
+            </div>
 
-                      {/* Visual progress bar */}
-                      <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
-                        <div
-                          className="bg-gradient-to-r from-amber-500 to-amber-300 h-full rounded-full transition-all duration-700"
-                          style={{ width: `${Math.max(4, percentage)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Reconciliation Variance */}
+            {hasCounted && (
+              <div
+                className={`p-3.5 rounded-[12px] border flex items-center justify-between ${
+                  cashVariance === 0
+                    ? 'bg-[rgba(34,197,94,0.12)] border-[rgba(34,197,94,0.4)] text-[#22C55E]'
+                    : cashVariance > 0
+                    ? 'bg-[rgba(34,211,238,0.12)] border-[rgba(34,211,238,0.4)] text-[#22D3EE]'
+                    : 'bg-[rgba(249,115,22,0.12)] border-[rgba(249,115,22,0.4)] text-[#F97316]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {cashVariance === 0 ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  )}
+                  <span className="text-xs font-bold">
+                    {cashVariance === 0 ? 'Drawer Balanced (Zero Discrepancy)' : cashVariance > 0 ? 'Cash Surplus (Over)' : 'Cash Shortage (Short)'}
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-sm">
+                  {cashVariance >= 0 ? `+ PKR ${cashVariance.toLocaleString()}` : `- PKR ${Math.abs(cashVariance).toLocaleString()}`}
+                </span>
               </div>
             )}
           </div>
-
-          {/* Right Column: Cash Drawer Reconciliation (5 cols) */}
-          <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 shadow-xl space-y-5">
-            <div className="flex items-center space-x-2 pb-3 border-b border-slate-800">
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                <Banknote className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Cash Drawer Balancing</h3>
-                <p className="text-xs text-slate-400">
-                  Shift opening float & physical cash count
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {/* Opening Float Input */}
-              <div>
-                <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">
-                  Shift Starting Cash Float (PKR)
-                </label>
-                <input
-                  type="number"
-                  value={openingFloat}
-                  onChange={(e) => setOpeningFloat(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-white font-mono focus:outline-none focus:border-amber-500/60"
-                />
-              </div>
-
-              {/* Tally Breakdown */}
-              <div className="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800/80 space-y-2 text-xs">
-                <div className="flex justify-between text-slate-400">
-                  <span>Starting Float</span>
-                  <span className="font-mono text-slate-200">
-                    PKR {openingFloat.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Cash Collected (Orders)</span>
-                  <span className="font-mono text-emerald-400 font-bold">
-                    + PKR {cashSales.toLocaleString()}
-                  </span>
-                </div>
-                <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs font-bold">
-                  <span className="text-slate-300 uppercase tracking-wider">
-                    Expected Drawer Total
-                  </span>
-                  <span className="text-sm text-white font-mono">
-                    PKR {expectedClosingCash.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Physical Cash Counted Input */}
-              <div>
-                <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1">
-                  Physical Cash Counted at Close (PKR)
-                </label>
-                <input
-                  type="number"
-                  value={countedCash}
-                  onChange={(e) => setCountedCash(e.target.value)}
-                  placeholder="Enter counted register cash..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-white font-mono focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
-
-              {/* Variance Indicator */}
-              {hasCounted && (
-                <div
-                  className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold ${
-                    cashVariance === 0
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : cashVariance > 0
-                      ? 'bg-sky-500/10 border-sky-500/30 text-sky-400'
-                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2">
-                    {cashVariance === 0 ? (
-                      <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4" />
-                    )}
-                    <span>
-                      {cashVariance === 0
-                        ? 'Drawer Balanced Perfectly'
-                        : cashVariance > 0
-                        ? 'Cash Overage Detected'
-                        : 'Cash Shortage Detected'}
-                    </span>
-                  </div>
-
-                  <span className="font-mono text-sm">
-                    {cashVariance > 0 ? '+' : ''}PKR {cashVariance.toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              {/* Final Shift Lock Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  alert(
-                    `Shift closed successfully! Expected: PKR ${expectedClosingCash.toLocaleString()}, Counted: PKR ${(
-                      parsedCountedCash || expectedClosingCash
-                    ).toLocaleString()}`
-                  );
-                }}
-                className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2"
-              >
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
-                <span>Verify & Close Register Shift</span>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
-    </Phase5Layout>
+    </CashierShell>
   );
 }

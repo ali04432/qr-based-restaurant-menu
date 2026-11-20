@@ -19,7 +19,6 @@ import {
   WifiOff,
   User,
   ChefHat,
-  ShieldCheck,
   ChevronDown,
   RefreshCw,
 } from 'lucide-react';
@@ -147,13 +146,6 @@ export function Phase5Layout({
               >
                 <ChefHat className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Chef KDS</span>
-              </Link>
-              <Link
-                href="/admin"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] text-slate-400 hover:text-blue-300 hover:bg-slate-900/60 transition-colors"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-                <span>Admin OS</span>
               </Link>
             </div>
           </div>
