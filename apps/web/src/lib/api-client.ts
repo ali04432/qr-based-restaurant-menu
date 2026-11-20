@@ -2,8 +2,8 @@ import { ApiResponse, ApiErrorResponse } from '@qr-menu/shared';
 
 // ============================================================
 // Typed API Client
-// A thin fetch wrapper that handles auth headers, base URL,
-// and response parsing consistently across all API calls.
+// A robust fetch wrapper that safely handles JSON parsing,
+// status codes, Content-Type headers, network errors, and auth.
 // ============================================================
 
 class ApiError extends Error {
@@ -29,7 +29,7 @@ const BASE_URL =
     : (process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? '');
 
 /**
- * Core fetch wrapper with typed responses and error handling.
+ * Core fetch wrapper with safe response parsing and structured error handling.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { token, headers: customHeaders, ...rest } = options;
@@ -40,24 +40,85 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...(customHeaders as Record<string, string>),
   };
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers,
-    ...rest,
-  });
-
-  const json = await response.json();
-
-  if (!response.ok) {
-    const errorBody = json as ApiErrorResponse;
-    throw new ApiError(
-      response.status,
-      errorBody.error?.code ?? 'UNKNOWN_ERROR',
-      errorBody.error?.message ?? 'An unexpected error occurred',
-      errorBody.error?.details
-    );
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      headers,
+      ...rest,
+    });
+  } catch (networkError) {
+    const message = networkError instanceof Error ? networkError.message : 'Network error';
+    throw new ApiError(0, 'NETWORK_ERROR', `Unable to connect to server: ${message}`);
   }
 
-  return (json as ApiResponse<T>).data;
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  let rawText = '';
+  try {
+    rawText = await response.text();
+  } catch {
+    rawText = '';
+  }
+
+  let parsedBody: any = null;
+  if (isJson && rawText.trim().length > 0) {
+    try {
+      parsedBody = JSON.parse(rawText);
+    } catch {
+      parsedBody = null;
+    }
+  }
+
+  if (!response.ok) {
+    const defaultMessages: Record<number, { code: string; message: string }> = {
+      400: { code: 'BAD_REQUEST', message: 'Invalid request' },
+      401: { code: 'UNAUTHORIZED', message: 'Authentication required. Please sign in.' },
+      403: { code: 'FORBIDDEN', message: 'You do not have permission to perform this action.' },
+      404: { code: 'NOT_FOUND', message: 'Requested resource was not found.' },
+      409: { code: 'CONFLICT', message: 'Conflict with existing data.' },
+      422: { code: 'UNPROCESSABLE_ENTITY', message: 'Validation failed.' },
+      500: { code: 'INTERNAL_ERROR', message: 'Internal server error. Please try again.' },
+      502: { code: 'BAD_GATEWAY', message: 'Server is temporarily unavailable. Please retry.' },
+      503: { code: 'SERVICE_UNAVAILABLE', message: 'Database or service temporarily unavailable. Please retry shortly.' },
+      504: { code: 'GATEWAY_TIMEOUT', message: 'Server response timed out. Please retry.' },
+    };
+
+    const statusDefaults = defaultMessages[response.status] || {
+      code: `HTTP_${response.status}`,
+      message: `Request failed with status ${response.status}`,
+    };
+
+    const errorCode =
+      parsedBody?.code ||
+      parsedBody?.error?.code ||
+      statusDefaults.code;
+
+    const errorMessage =
+      parsedBody?.message ||
+      parsedBody?.error?.message ||
+      (typeof parsedBody === 'string' && parsedBody.trim().length > 0 ? parsedBody : '') ||
+      (rawText && rawText.length < 200 && !rawText.includes('<html') ? rawText : '') ||
+      statusDefaults.message;
+
+    const errorDetails = parsedBody?.details || parsedBody?.error?.details;
+
+    throw new ApiError(response.status, errorCode, errorMessage, errorDetails);
+  }
+
+  // Handle successful empty response (e.g. 204 No Content)
+  if (!rawText || rawText.trim().length === 0) {
+    return undefined as unknown as T;
+  }
+
+  if (parsedBody && typeof parsedBody === 'object') {
+    if ('data' in parsedBody) {
+      return parsedBody.data as T;
+    }
+    return parsedBody as T;
+  }
+
+  return rawText as unknown as T;
 }
 
 /** Typed HTTP method helpers */

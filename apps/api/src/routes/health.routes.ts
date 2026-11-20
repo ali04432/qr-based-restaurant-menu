@@ -12,16 +12,43 @@ import { prisma } from '../config/database';
 
 const router = Router();
 
-router.get('/', (_req: Request, res: Response) => {
-  const healthData: HealthResponse = {
-    status: 'ok',
+router.get('/', async (_req: Request, res: Response) => {
+  const t0 = Date.now();
+  let isDbConnected = false;
+  let dbLatencyMs = -1;
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    isDbConnected = true;
+    dbLatencyMs = Date.now() - t0;
+  } catch (err) {
+    console.warn('[Health Check] Database connectivity check failed:', err instanceof Error ? err.message : err);
+    isDbConnected = false;
+  }
+
+  const payload = {
+    status: isDbConnected ? 'ok' : 'degraded',
+    database: isDbConnected ? 'connected' : 'unavailable',
+    dbLatencyMs: isDbConnected ? dbLatencyMs : undefined,
     version: process.env.npm_package_version ?? '1.0.0',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     environment: process.env.NODE_ENV ?? 'development',
   };
 
-  return sendSuccess(res, healthData, { message: 'Server is healthy' });
+  if (!isDbConnected) {
+    return res.status(503).json({
+      success: false,
+      statusCode: 503,
+      code: 'DATABASE_UNAVAILABLE',
+      message: 'Database is currently unavailable',
+      status: payload.status,
+      database: payload.database,
+      data: payload,
+    });
+  }
+
+  return sendSuccess(res, payload, { message: 'Server and database are healthy' });
 });
 
 /**

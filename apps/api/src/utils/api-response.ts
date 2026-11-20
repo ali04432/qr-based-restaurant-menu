@@ -46,14 +46,17 @@ export function sendError(
   message: string,
   details?: unknown
 ): Response {
-  const body: ApiErrorResponse = {
+  const body: ApiErrorResponse & { message: string; code: string } = {
     success: false,
     statusCode,
+    message,
+    code,
     error: {
       code,
       message,
       ...(details !== undefined && { details }),
     },
+    ...(details !== undefined && { details }),
   };
   return res.status(statusCode).json(body);
 }
