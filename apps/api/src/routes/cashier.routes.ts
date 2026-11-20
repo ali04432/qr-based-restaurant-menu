@@ -273,9 +273,34 @@ router.post('/payments/confirm', async (req: AuthenticatedRequest, res: Response
         ? Math.max(0, parseFloat((receivedAmount - amount).toFixed(2)))
         : changeAmount || 0;
 
-    // Atomic transaction
+    // Atomic transaction with concurrency & duplicate-settlement protection
     const result = await prisma.$transaction(async (tx) => {
-      // Create payment
+      // 1. Guard against concurrent settlements
+      const existingPayment = await tx.payment.findFirst({
+        where: { orderId, status: 'COMPLETED' },
+      });
+      if (existingPayment) {
+        throw new AppError('This order has already been paid in full', 400, 'ALREADY_PAID');
+      }
+
+      // 2. Atomically transition paymentStatus: only succeeds if NOT already COMPLETED
+      const updateResult = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          paymentStatus: { not: 'COMPLETED' },
+        },
+        data: {
+          paymentStatus: 'COMPLETED',
+          paymentMethod: method as any,
+          status: ['SERVED', 'READY'].includes(order.status) ? 'COMPLETED' : order.status,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        throw new AppError('This order has already been settled or payment is in progress', 409, 'ALREADY_PAID');
+      }
+
+      // 3. Create payment record
       const payment = await tx.payment.create({
         data: {
           restaurantId,
@@ -292,19 +317,13 @@ router.post('/payments/confirm', async (req: AuthenticatedRequest, res: Response
         },
       });
 
-      // Update order status
-      const updatedOrder = await tx.order.update({
+      const updatedOrder = await tx.order.findUniqueOrThrow({
         where: { id: orderId },
-        data: {
-          paymentStatus: 'COMPLETED',
-          paymentMethod: method as any,
-          status: ['SERVED', 'READY'].includes(order.status) ? 'COMPLETED' : order.status,
-        },
         include: { table: true },
       });
 
       return { payment, updatedOrder };
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     await logStaffAction(
       restaurantId,
