@@ -318,7 +318,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       });
 
       return order;
-    }, { maxWait: 10000, timeout: 30000 });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // Attach tableNumber for KDS display
     const enrichedOrder: any = {
