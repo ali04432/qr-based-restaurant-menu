@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { DashboardLayout } from '../../components/dashboard/DashboardLayout';
 import { DashboardHeader, DateFilterOption } from '../../components/dashboard/DashboardHeader';
 import { DashboardKPICards } from '../../components/dashboard/DashboardKPICards';
@@ -33,11 +33,45 @@ import {
   AdminNotification,
 } from '@qr-menu/shared';
 
+/** Convert an API order into the shape expected by the Live Kitchen widget. */
+function toKitchenTicket(order: any): KitchenTicket | null {
+  if (!order?.id) return null;
+
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  return {
+    id: String(order.id),
+    orderNumber: order.orderNumber || `ORD-${String(order.id).slice(0, 4)}`,
+    tableNumber: String(order.table?.tableNumber || order.tableNumber || '01'),
+    status: order.status || 'PENDING',
+    itemCount: items.length || Number(order.itemCount) || 1,
+    items,
+    createdAt: order.createdAt || new Date().toISOString(),
+  };
+}
+
+/** Log individual request failures while allowing the rest of the dashboard to load. */
+function logRequestFailure<T>(
+  label: string,
+  result: PromiseSettledResult<T>
+): void {
+  if (result.status === 'rejected') {
+    console.warn(`[AdminDashboard] ${label} request failed:`, result.reason);
+  }
+}
+
 export default function AdminDashboardPage() {
   const { user, token } = useAuthContext();
-  const restaurantId = user?.restaurantId || '1';
 
-  // State
+  // Do not send requests using a made-up restaurant ID. The dashboard needs a real
+  // restaurant scope from the authenticated user.
+  const restaurantId = user?.restaurantId || '';
+
+  // Request counters prevent an older response from overwriting newer dashboard data.
+  const dataRequestId = useRef(0);
+  const analyticsRequestId = useRef(0);
+
+  // Dashboard data
   const [overview, setOverview] = useState<AdminDashboardOverview | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
@@ -55,42 +89,38 @@ export default function AdminDashboardPage() {
   const [kitchenOrders, setKitchenOrders] = useState<KitchenTicket[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
 
-  // Filter & Search Controls
+  // Filter and search controls
   const [dateRange, setDateRange] = useState<DateFilterOption>('7d');
   const [customFrom, setCustomFrom] = useState<string | undefined>();
   const [customTo, setCustomTo] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Loading States
+  // Loading states
   const [loading, setLoading] = useState(true);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Real-time Socket.IO Connection
+  // Real-time Socket.IO connection
   const { isConnected, on } = useSocket({
     restaurantId,
     token: token || undefined,
-    enabled: !!token,
+    enabled: Boolean(token && restaurantId),
   });
 
-  // 1. Initial Load of Full Dashboard Data
+  /** Load the operational dashboard data. Failed sections do not block other sections. */
   const fetchAllData = useCallback(async () => {
-    if (!token) return;
+    const requestId = ++dataRequestId.current;
+
+    if (!token || !restaurantId) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
       setRefreshing(true);
 
-      const [
-        overviewRes,
-        paymentsRes,
-        customersRes,
-        tablesRes,
-        arAssetsRes,
-        arAnalyticsRes,
-        inventoryRes,
-        staffRes,
-        kitchenRes,
-        notifsRes,
-      ] = await Promise.allSettled([
+      const results = await Promise.allSettled([
         adminService.getDashboardOverview(restaurantId, token),
         adminService.getPaymentSummary(restaurantId, token),
         adminService.getCustomers(restaurantId, { page: 1, limit: 1 }, token),
@@ -103,39 +133,74 @@ export default function AdminDashboardPage() {
         adminService.getNotifications(restaurantId, token),
       ]);
 
+      // Ignore responses from a previous user, restaurant, or refresh request.
+      if (requestId !== dataRequestId.current) return;
+
+      const [
+        overviewRes,
+        paymentsRes,
+        customersRes,
+        tablesRes,
+        arAssetsRes,
+        arAnalyticsRes,
+        inventoryRes,
+        staffRes,
+        kitchenRes,
+        notifsRes,
+      ] = results;
+
+      logRequestFailure('Dashboard overview', overviewRes);
+      logRequestFailure('Payment analytics', paymentsRes);
+      logRequestFailure('Customer analytics', customersRes);
+      logRequestFailure('Tables', tablesRes);
+      logRequestFailure('AR assets', arAssetsRes);
+      logRequestFailure('AR analytics', arAnalyticsRes);
+      logRequestFailure('Inventory', inventoryRes);
+      logRequestFailure('Staff', staffRes);
+      logRequestFailure('Kitchen orders', kitchenRes);
+      logRequestFailure('Notifications', notifsRes);
+
       if (overviewRes.status === 'fulfilled') setOverview(overviewRes.value);
       if (paymentsRes.status === 'fulfilled') setPaymentSummary(paymentsRes.value);
-      if (customersRes.status === 'fulfilled') setCustomerSummary(customersRes.value.summary);
-      if (tablesRes.status === 'fulfilled') setTables(tablesRes.value);
-      if (arAssetsRes.status === 'fulfilled') setArAssets(arAssetsRes.value);
-      if (arAnalyticsRes.status === 'fulfilled') setArAnalytics(arAnalyticsRes.value);
-      if (inventoryRes.status === 'fulfilled') setInventory(inventoryRes.value);
-      if (staffRes.status === 'fulfilled') setStaff(staffRes.value);
+      if (customersRes.status === 'fulfilled') {
+        setCustomerSummary(customersRes.value?.summary || null);
+      }
+      if (tablesRes.status === 'fulfilled') setTables(tablesRes.value || []);
+      if (arAssetsRes.status === 'fulfilled') setArAssets(arAssetsRes.value || []);
+      if (arAnalyticsRes.status === 'fulfilled') setArAnalytics(arAnalyticsRes.value || null);
+      if (inventoryRes.status === 'fulfilled') setInventory(inventoryRes.value || []);
+      if (staffRes.status === 'fulfilled') setStaff(staffRes.value || []);
+
       if (kitchenRes.status === 'fulfilled') {
-        const mappedKitchen: KitchenTicket[] = (kitchenRes.value || []).map((ko: any) => ({
-          id: ko.id,
-          orderNumber: ko.orderNumber || `ORD-${ko.id.slice(0, 4)}`,
-          tableNumber: ko.table?.tableNumber || ko.tableNumber || '01',
-          status: ko.status,
-          itemCount: ko.items?.length || ko.itemCount || 1,
-          items: ko.items,
-          createdAt: ko.createdAt || new Date().toISOString(),
-        }));
+        const mappedKitchen = (kitchenRes.value || [])
+          .map((order: any) => toKitchenTicket(order))
+          .filter((ticket: KitchenTicket | null): ticket is KitchenTicket => ticket !== null);
         setKitchenOrders(mappedKitchen);
       }
-      if (notifsRes.status === 'fulfilled') setNotifications(notifsRes.value || []);
-    } catch (err) {
-      console.warn('[AdminDashboard] Error fetching operational data:', err);
+
+      if (notifsRes.status === 'fulfilled') {
+        setNotifications(notifsRes.value || []);
+      }
+    } catch (error) {
+      console.warn('[AdminDashboard] Unexpected error fetching dashboard data:', error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === dataRequestId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [restaurantId, token]);
 
-  // 2. Fetch Analytics by Date Range
+  /** Load analytics for the currently selected date range. */
   const fetchAnalyticsData = useCallback(
     async (range: DateFilterOption, from?: string, to?: string) => {
-      if (!token) return;
+      const requestId = ++analyticsRequestId.current;
+
+      if (!token || !restaurantId) {
+        setAnalyticsLoading(false);
+        return;
+      }
+
       try {
         setAnalyticsLoading(true);
         const data = await adminService.getAnalytics(
@@ -145,153 +210,181 @@ export default function AdminDashboardPage() {
           to,
           token
         );
-        setAnalytics(data);
-      } catch (err) {
-        console.warn('[AdminDashboard] Error fetching analytics range:', err);
+
+        // Prevent an older date-range request from replacing the latest selection.
+        if (requestId === analyticsRequestId.current) {
+          setAnalytics(data);
+        }
+      } catch (error) {
+        if (requestId === analyticsRequestId.current) {
+          console.warn('[AdminDashboard] Error fetching analytics for selected range:', error);
+        }
       } finally {
-        setAnalyticsLoading(false);
+        if (requestId === analyticsRequestId.current) {
+          setAnalyticsLoading(false);
+        }
       }
     },
     [restaurantId, token]
   );
 
   useEffect(() => {
-    fetchAllData();
+    void fetchAllData();
+    return () => {
+      dataRequestId.current += 1;
+    };
   }, [fetchAllData]);
 
   useEffect(() => {
-    fetchAnalyticsData(dateRange, customFrom, customTo);
+    void fetchAnalyticsData(dateRange, customFrom, customTo);
+    return () => {
+      analyticsRequestId.current += 1;
+    };
   }, [dateRange, customFrom, customTo, fetchAnalyticsData]);
 
-  // 3. Socket.IO Real-Time Order Stream
+  // Socket.IO real-time order updates
   useEffect(() => {
-    if (!on) return;
+    if (!on || !token || !restaurantId) return;
 
     const unsubCreated = on<any>('order.created', (newOrder) => {
-      // Add to kitchen queue
-      setKitchenOrders((prev) => [
-        {
-          id: newOrder.id,
-          orderNumber: newOrder.orderNumber || `ORD-${newOrder.id.slice(0, 4)}`,
-          tableNumber: newOrder.table?.tableNumber || newOrder.tableNumber || '01',
-          status: newOrder.status || 'PENDING',
-          itemCount: newOrder.items?.length || 1,
-          items: newOrder.items,
-          createdAt: newOrder.createdAt || new Date().toISOString(),
-        },
-        ...prev,
+      const newTicket = toKitchenTicket(newOrder);
+      if (!newTicket) return;
+
+      // Upsert by order ID so reconnects or repeated events cannot create duplicates.
+      setKitchenOrders((previous) => [
+        newTicket,
+        ...previous.filter((ticket) => ticket.id !== newTicket.id),
       ]);
 
-      // Refresh overview KPI counters
-      fetchAllData();
+      // Refresh totals and the other operational widgets after a new order arrives.
+      void fetchAllData();
     });
 
-    const unsubUpdated = on<any>('order.statusChanged', (updated) => {
-      setKitchenOrders((prev) =>
-        prev.map((o) => (o.id === updated.id ? { ...o, status: updated.status } : o))
-      );
-    });
+    const updateOrderStatus = (updated: any) => {
+      if (!updated?.id || !updated?.status) return;
 
-    const unsubKitchen = on<any>('kitchen.orderUpdated', (updated) => {
-      setKitchenOrders((prev) =>
-        prev.map((o) => (o.id === updated.id ? { ...o, status: updated.status } : o))
+      setKitchenOrders((previous) =>
+        previous.map((ticket) =>
+          ticket.id === String(updated.id)
+            ? { ...ticket, status: updated.status }
+            : ticket
+        )
       );
-    });
+    };
+
+    const unsubUpdated = on<any>('order.statusChanged', updateOrderStatus);
+    const unsubKitchen = on<any>('kitchen.orderUpdated', updateOrderStatus);
 
     return () => {
       unsubCreated();
       unsubUpdated();
       unsubKitchen();
     };
-  }, [on, fetchAllData]);
+  }, [on, token, restaurantId, fetchAllData]);
 
-  // Notifications Mark All Read
-  const handleMarkAllRead = async () => {
-    if (!token) return;
+  // Mark all notifications as read
+  const handleMarkAllRead = useCallback(async () => {
+    if (!token || notifications.length === 0) return;
+
     try {
       await adminService.markAllNotificationsRead(token);
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    } catch (e) {}
-  };
+      setNotifications((previous) => previous.map((notification) => ({
+        ...notification,
+        isRead: true,
+      })));
+    } catch (error) {
+      console.warn('[AdminDashboard] Could not mark notifications as read:', error);
+    }
+  }, [notifications.length, token]);
 
-  // Date Range Change Handler
-  const handleDateRangeChange = (
-    range: DateFilterOption,
-    cFrom?: string,
-    cTo?: string
-  ) => {
-    setDateRange(range);
-    setCustomFrom(cFrom);
-    setCustomTo(cTo);
-  };
+  // Date range change handler
+  const handleDateRangeChange = useCallback(
+    (range: DateFilterOption, from?: string, to?: string) => {
+      setDateRange(range);
+      setCustomFrom(from);
+      setCustomTo(to);
+    },
+    []
+  );
 
-  // Calculated Metrics
+  // Calculated metrics
   const metrics = overview?.metrics || null;
 
-  // Revenue Trend Data: prefer analytics range trend if available, else overview 7d trend
+  // Revenue trend: use the selected analytics period, with the overview trend as fallback.
   const trendData = useMemo(() => {
-    if (analytics?.revenueTrend && analytics.revenueTrend.length > 0) {
-      return analytics.revenueTrend.map((t) => ({
-        date: (t as any).label || (t as any).date,
-        revenue: t.revenue,
-        orders: t.orders,
+    if (analytics?.revenueTrend?.length) {
+      return analytics.revenueTrend.map((trend) => ({
+        date: (trend as any).label || (trend as any).date,
+        revenue: trend.revenue,
+        orders: trend.orders,
       }));
     }
+
     return overview?.revenueTrend || [];
   }, [analytics, overview]);
 
-  // Top Selling Items (with search query filtering)
+  // Top-selling items, filtered by the dashboard search field.
   const topSellingDishes = useMemo(() => {
-    const list = analytics?.topItems || overview?.topSellingItems || [];
-    if (!searchQuery.trim()) return list;
-    return list.filter((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const items = analytics?.topItems || overview?.topSellingItems || [];
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return items;
+    return items.filter((item) => String(item.name || '').toLowerCase().includes(query));
   }, [analytics, overview, searchQuery]);
 
-  // Recent Orders (with search query filtering)
+  // Recent orders, filtered by order number or table number.
   const recentOrdersList = useMemo(() => {
-    const list = overview?.recentOrders || [];
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase();
-    return list.filter(
-      (o) =>
-        o.orderNumber.toLowerCase().includes(q) ||
-        o.tableNumber.toLowerCase().includes(q)
+    const orders = overview?.recentOrders || [];
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return orders;
+
+    return orders.filter((order) =>
+      String(order.orderNumber || '').toLowerCase().includes(query) ||
+      String(order.tableNumber || '').toLowerCase().includes(query)
     );
   }, [overview, searchQuery]);
 
-  // Floor Occupancy Rate
+  // Floor occupancy
   const totalTablesCount = tables.length;
-  const occupiedTablesCount = tables.filter((t) => (t as any).status === 'OCCUPIED' || !(t as any).isActive).length;
-  const floorOccupancy =
-    totalTablesCount > 0 ? Math.round((occupiedTablesCount / totalTablesCount) * 100) : 0;
+  const occupiedTablesCount = tables.filter((table) => {
+    // The API returns Table.status, but the shared frontend Table type currently omits it.
+    const status = (table as unknown as { status?: string }).status;
+    return status === 'OCCUPIED';
+  }).length;
+  const floorOccupancy = totalTablesCount > 0
+    ? Math.round((occupiedTablesCount / totalTablesCount) * 100)
+    : 0;
 
-  // QR scans & AR views counts
-  const qrScans = totalTablesCount * 3 + (metrics?.todayOrders || 0);
-  const arViews = arAnalytics?.totalEvents || arAssets.length * 5 || 12;
+  // Use API-provided counts only. Do not show estimated QR scans or AR views as real metrics.
+  const qrScans = Number((metrics as any)?.qrScans ?? 0);
+  const arViews = Number(arAnalytics?.totalEvents ?? 0);
 
-  // Peak Hours calculation from recent orders or default distribution
+  // Peak-hour distribution from the timestamps of the available recent orders.
+  // Slots without observed orders remain zero instead of displaying sample/fake values.
   const peakHoursData: PeakHourSlot[] = useMemo(() => {
-    const hours = [
-      { hour: 11, label: '11 AM', orders: 2 },
-      { hour: 12, label: '12 PM', orders: 6 },
-      { hour: 13, label: '1 PM', orders: 11 },
-      { hour: 14, label: '2 PM', orders: 8 },
-      { hour: 15, label: '3 PM', orders: 4 },
-      { hour: 16, label: '4 PM', orders: 3 },
-      { hour: 17, label: '5 PM', orders: 5 },
-      { hour: 18, label: '6 PM', orders: 9 },
-      { hour: 19, label: '7 PM', orders: 14 },
-      { hour: 20, label: '8 PM', orders: 16 },
-      { hour: 21, label: '9 PM', orders: 12 },
-      { hour: 22, label: '10 PM', orders: 5 },
+    const hours: PeakHourSlot[] = [
+      { hour: 11, label: '11 AM', orders: 0 },
+      { hour: 12, label: '12 PM', orders: 0 },
+      { hour: 13, label: '1 PM', orders: 0 },
+      { hour: 14, label: '2 PM', orders: 0 },
+      { hour: 15, label: '3 PM', orders: 0 },
+      { hour: 16, label: '4 PM', orders: 0 },
+      { hour: 17, label: '5 PM', orders: 0 },
+      { hour: 18, label: '6 PM', orders: 0 },
+      { hour: 19, label: '7 PM', orders: 0 },
+      { hour: 20, label: '8 PM', orders: 0 },
+      { hour: 21, label: '9 PM', orders: 0 },
+      { hour: 22, label: '10 PM', orders: 0 },
     ];
 
-    if (overview?.recentOrders && overview.recentOrders.length > 0) {
-      overview.recentOrders.forEach((o) => {
-        const h = new Date(o.createdAt).getHours();
-        const found = hours.find((slot) => slot.hour === h);
-        if (found) found.orders += 1;
-      });
+    for (const order of overview?.recentOrders || []) {
+      const timestamp = new Date(order.createdAt).getTime();
+      if (!Number.isFinite(timestamp)) continue;
+
+      const orderHour = new Date(timestamp).getHours();
+      const slot = hours.find((entry) => entry.hour === orderHour);
+      if (slot) slot.orders += 1;
     }
 
     return hours;
@@ -301,7 +394,6 @@ export default function AdminDashboardPage() {
     <DashboardLayout>
       {({ sidebarOpen, setSidebarOpen }) => (
         <>
-          {/* Header */}
           <DashboardHeader
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             selectedDateRange={dateRange}
@@ -317,18 +409,17 @@ export default function AdminDashboardPage() {
             onMarkAllNotificationsRead={handleMarkAllRead}
           />
 
-          {/* Main Content Body */}
           <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
-            {/* Top Critical Low Stock Alert */}
             <DashboardLowStock alerts={overview?.lowStockAlerts || []} />
 
-            {/* Section 7: Key Business Overview KPI Cards */}
             <DashboardKPICards metrics={metrics} loading={loading} />
 
-            {/* Section 8: Revenue Trend Chart & Revenue Donut */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <DashboardRevenueChart data={trendData} loading={analyticsLoading || loading} />
+                <DashboardRevenueChart
+                  data={trendData}
+                  loading={analyticsLoading || loading}
+                />
               </div>
               <div>
                 <DashboardRevenueDonut
@@ -339,7 +430,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Section 9 & 8: Live Kitchen Status (Socket.IO) & Payment Analytics */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <DashboardLiveKitchen
                 orders={kitchenOrders}
@@ -352,19 +442,11 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            {/* Section 8: Peak Hours & Customer Analytics */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <DashboardPeakHoursChart
-                data={peakHoursData}
-                loading={loading}
-              />
-              <DashboardCustomerAnalytics
-                summary={customerSummary}
-                loading={loading}
-              />
+              <DashboardPeakHoursChart data={peakHoursData} loading={loading} />
+              <DashboardCustomerAnalytics summary={customerSummary} loading={loading} />
             </div>
 
-            {/* Section 16: Quick Statistics (Occupancy, QR Scans, AR Views, Active Orders) */}
             <DashboardQuickStats
               tableOccupancy={floorOccupancy}
               qrScans={qrScans}
@@ -373,7 +455,6 @@ export default function AdminDashboardPage() {
               loading={loading}
             />
 
-            {/* Section 10 & 11: Dedicated QR & 3D/AR Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <DashboardQRWidget
                 tables={tables}
@@ -388,29 +469,21 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            {/* Section 12 & 13: Inventory Widget & Staff Summary Table */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <DashboardInventoryWidget
                 inventory={inventory}
                 lowStockAlerts={overview?.lowStockAlerts || []}
                 loading={loading}
               />
-              <DashboardStaffWidget
-                staff={staff}
-                loading={loading}
-              />
+              <DashboardStaffWidget staff={staff} loading={loading} />
             </div>
 
-            {/* Section 14 & 15: Top Selling Dishes & Recent Orders Ledger */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <DashboardTopSelling
                 items={topSellingDishes}
                 loading={loading || analyticsLoading}
               />
-              <DashboardRecentOrders
-                orders={recentOrdersList}
-                loading={loading}
-              />
+              <DashboardRecentOrders orders={recentOrdersList} loading={loading} />
             </div>
           </main>
         </>
