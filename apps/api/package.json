@@ -8,6 +8,7 @@
     "dev": "ts-node-dev --respawn --transpile-only --exit-child -r tsconfig-paths/register src/index.ts",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/index.js",
+    "test": "node --test test/automated-api.test.js",
     "type-check": "tsc --noEmit",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:validate": "prisma validate",
