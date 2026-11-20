@@ -49,10 +49,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
     // 1. Authoritative Restaurant Resolution (supports UUID, slug, or single-tenant default)
     let restaurant = rawRestaurantId
       ? await prisma.restaurant.findFirst({
-          where: {
-            OR: [{ id: rawRestaurantId }, { slug: rawRestaurantId }],
-          },
-        })
+        where: {
+          OR: [{ id: rawRestaurantId }, { slug: rawRestaurantId }],
+        },
+      })
       : null;
 
     if (!restaurant) {
@@ -318,7 +318,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       });
 
       return order;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
 
     // Attach tableNumber for KDS display
     const enrichedOrder: any = {
@@ -479,7 +479,7 @@ router.patch(
             }
           });
         }
-        
+
         return updated;
       });
 
