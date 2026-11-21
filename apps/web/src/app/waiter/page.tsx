@@ -1,35 +1,199 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Utensils,
   Plus,
   RefreshCw,
   Clock,
   Users,
   CheckCircle2,
-  Bell,
   Check,
-  AlertCircle,
-  Search,
-  Filter,
-  ArrowRight,
-  TrendingUp,
-  Radio,
+  ChevronRight,
+  Utensils,
+  LogOut,
+  BellOff,
+  Bell,
+  Receipt,
+  Calendar,
+  Activity,
+  UserCheck,
+  Timer,
+  FileText,
 } from 'lucide-react';
-import { Phase5Layout } from '../../components/phase5/Phase5Layout';
+
+import { WaiterLayout, WaiterSection } from './waiter-layout';
 import { TableDetailDrawer } from '../../components/phase5/waiter/TableDetailDrawer';
 import { WalkInOrderModal } from '../../components/phase5/waiter/WalkInOrderModal';
 import { TransferTableModal } from '../../components/phase5/waiter/TransferTableModal';
-import { waiterService } from '../../services/waiter.service';
+import {
+  FoodReadyAlert,
+  useFoodReadyAlerts,
+  playBellSound,
+} from '../../components/waiter/FoodReadyAlert';
+import {
+  waiterService,
+  WaiterShiftInfo,
+  WaiterPersonalReport,
+} from '../../services/waiter.service';
 import { useAuthContext } from '../../context/AuthContext';
 import { useSocket } from '../../hooks/useSocket';
-import { TableWithOrders, WaiterSummary, CustomerRequestRecord } from '@qr-menu/shared';
+import {
+  TableWithOrders,
+  WaiterSummary,
+  CustomerRequestRecord,
+  ActiveOrderSummary,
+} from '@qr-menu/shared';
 
+// ============================================================
+// Silver Sapoon — Waiter Dashboard (Redesigned)
+// 5 Sections: Tables · Orders · Ready · Bills · Profile
+// ============================================================
+
+// ── Design tokens ──────────────────────────────────────────
+const C = {
+  bg: '#0B0B0D',
+  card: '#151518',
+  raised: '#1D1D21',
+  border: '#26262B',
+  textPrimary: '#F4EFE6',
+  textMuted: '#A39F96',
+  gold: '#D6A84F',
+  teal: '#5BBFAE',
+  blue: '#8FA3E8',
+  orange: '#E7855A',
+  muted: '#9A968D',
+} as const;
+
+// ── Helpers ─────────────────────────────────────────────────
+function minutesAgo(isoString: string): number {
+  return Math.floor((Date.now() - new Date(isoString).getTime()) / 60000);
+}
+
+function formatTime(isoString: string): string {
+  const d = new Date(isoString);
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function elapsedLabel(minutes: number): string {
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'PENDING':
+    case 'RECEIVED':
+      return C.blue;
+    case 'PREPARING':
+    case 'COOKING':
+    case 'IN_KITCHEN':
+      return C.gold;
+    case 'READY':
+      return C.teal;
+    case 'SERVED':
+    case 'COMPLETED':
+      return C.muted;
+    case 'CANCELLED':
+      return '#EF4444';
+    default:
+      return C.textMuted;
+  }
+}
+
+function statusLabel(status: string): string {
+  return status.replace(/_/g, ' ');
+}
+
+// ── Status badge pill ────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const color = getStatusColor(status);
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+      style={{
+        background: `${color}20`,
+        color,
+        border: `1px solid ${color}40`,
+      }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full inline-block"
+        style={{ background: color }}
+      />
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+// ── Empty State ──────────────────────────────────────────────
+function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center py-20 rounded-2xl"
+      style={{
+        border: `2px dashed ${C.border}`,
+        background: `${C.card}60`,
+      }}
+    >
+      <div className="mb-4" style={{ color: C.textMuted }}>
+        {icon}
+      </div>
+      <h3
+        className="text-base font-semibold mb-1"
+        style={{ fontFamily: 'Playfair Display, Georgia, serif', color: C.textPrimary }}
+      >
+        {title}
+      </h3>
+      <p className="text-sm" style={{ color: C.textMuted }}>
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+// ── Section meta ─────────────────────────────────────────────
+const SECTION_META: Record<WaiterSection, { title: string; subtitle: string }> = {
+  tables: {
+    title: 'Floor Tables',
+    subtitle: 'Manage table occupancy and guest seating',
+  },
+  orders: {
+    title: 'Active Orders',
+    subtitle: 'Live kitchen tickets and order status',
+  },
+  ready: {
+    title: 'Ready to Serve',
+    subtitle: 'Orders prepared by the kitchen awaiting table delivery',
+  },
+  bills: {
+    title: 'Bills & Payments',
+    subtitle: 'Send bills to cashier for settlement',
+  },
+  profile: {
+    title: 'My Profile',
+    subtitle: 'Your shift stats and account settings',
+  },
+};
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 export default function WaiterDashboardPage() {
-  const { user, token } = useAuthContext();
+  const router = useRouter();
+  const { user, token, logout, isAuthenticated, isLoading: authLoading } = useAuthContext();
   const restaurantId = user?.restaurantId || '1';
 
+  // ── Auth Guard: Redirect unauthenticated requests to waiter login ──
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/waiter/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // ── Core State ─────────────────────────────────────────────
+  const [activeSection, setActiveSection] = useState<WaiterSection>('tables');
   const [summary, setSummary] = useState<WaiterSummary>({
     totalOrders: 0,
     servedOrders: 0,
@@ -37,76 +201,139 @@ export default function WaiterDashboardPage() {
     todaySales: 0,
     activeTables: 0,
   });
-
   const [tables, setTables] = useState<TableWithOrders[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [requests, setRequests] = useState<CustomerRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const userGestured = useRef(false);
 
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  // ── Shift & Reporting State ─────────────────────────────────
+  const [shiftInfo, setShiftInfo] = useState<WaiterShiftInfo | null>(null);
+  const [reportData, setReportData] = useState<WaiterPersonalReport | null>(null);
+  const [reportRange, setReportRange] = useState<'today' | 'yesterday' | 'this_week'>('today');
+  const [shiftActionLoading, setShiftActionLoading] = useState(false);
 
-  // Modals & Drawers State
+  // ── Tables Section State ────────────────────────────────────
+  type TableFilter = 'all' | 'free' | 'occ' | 'bill' | 'res';
+  const [tableFilter, setTableFilter] = useState<TableFilter>('all');
+
+  // ── Orders Section State ────────────────────────────────────
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+
+  // ── Modals ─────────────────────────────────────────────────
   const [selectedTable, setSelectedTable] = useState<TableWithOrders | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
   const [walkInModalOpen, setWalkInModalOpen] = useState(false);
-  const [walkInTableInfo, setWalkInTableInfo] = useState<{ id: string; number: string }>({ id: '', number: '' });
-
+  const [walkInTableInfo, setWalkInTableInfo] = useState<{ id: string; number: string }>({
+    id: '',
+    number: '',
+  });
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferSourceId, setTransferSourceId] = useState('');
 
-  // Socket Connection for live updates
-  const { on } = useSocket({
-    restaurantId,
-    token: token || undefined,
-  });
+  // ── Serving State (prevent double-submit) ─────────────────
+  const [servingOrderIds, setServingOrderIds] = useState<Set<string>>(new Set());
 
+  // ── Bill State ─────────────────────────────────────────────
+  const [sendingBillIds, setSendingBillIds] = useState<Set<string>>(new Set());
+  type PaymentMethod = 'Cash' | 'Card' | 'Online';
+  const [paymentMethods, setPaymentMethods] = useState<Record<string, PaymentMethod>>({});
+
+  // ── Food-Ready Alerts ──────────────────────────────────────
+  const { notifications, addAlert, dismiss: dismissAlert, seedSeenIds } = useFoodReadyAlerts(soundEnabled);
+
+  // ── Socket ─────────────────────────────────────────────────
+  const { on, isConnected, isConnecting } = useSocket({ restaurantId, token: token || undefined });
+
+  const connectionStatus = isConnected ? 'connected' : isConnecting ? 'connecting' : 'disconnected';
+
+  // ── Data Fetching ──────────────────────────────────────────
   const fetchData = useCallback(async () => {
     if (!token) return;
     try {
       setRefreshing(true);
-      const [sumData, tablesData, reqData] = await Promise.all([
-        waiterService.getSummary(restaurantId, token).catch(() => ({
-          totalOrders: 0,
-          servedOrders: 0,
-          pendingOrders: 0,
-          todaySales: 0,
-          activeTables: 0,
-        })),
+      const [sumData, tablesData, reqData, ordersData, shiftRes, reportRes] = await Promise.all([
+        waiterService
+          .getSummary(restaurantId, token)
+          .catch(() => ({
+            totalOrders: 0,
+            servedOrders: 0,
+            pendingOrders: 0,
+            todaySales: 0,
+            activeTables: 0,
+          })),
         waiterService.getTables(restaurantId, token).catch(() => []),
         waiterService.getCustomerRequests(token).catch(() => []),
+        waiterService.getOrders({ limit: 50 }, token).catch(() => []),
+        waiterService.getShift(token).catch(() => null),
+        waiterService.getPersonalReport(reportRange, token).catch(() => null),
       ]);
 
       setSummary(sumData);
       setTables(tablesData || []);
       setRequests(reqData || []);
+      setOrders(ordersData || []);
+      if (shiftRes) setShiftInfo(shiftRes);
+      if (reportRes) setReportData(reportRes);
 
-      // If drawer is open, keep selected table in sync
+      // Seed already-ready orders into seenIds so initial load does not trigger audible alarm
+      if (ordersData && Array.isArray(ordersData)) {
+        seedSeenIds(ordersData.filter((o: any) => o.status === 'READY').map((o: any) => o.id));
+      }
+
       if (selectedTable) {
-        const updated = tablesData?.find((t: TableWithOrders) => t.id === selectedTable.id);
+        const updated = (tablesData || []).find((t: TableWithOrders) => t.id === selectedTable.id);
         if (updated) setSelectedTable(updated);
       }
     } catch (err) {
-      console.error('Failed to load waiter data', err);
+      console.error('[WaiterDashboard] fetch failed', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [restaurantId, token, selectedTable]);
+  }, [restaurantId, token, selectedTable, reportRange, seedSeenIds]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Real-time Socket.IO Listeners
+  // ── Socket Listeners ───────────────────────────────────────
   useEffect(() => {
     const unsubOrderCreated = on('order.created', () => fetchData());
-    const unsubOrderStatus = on('order.statusChanged', () => fetchData());
     const unsubTableUpdated = on('table.updated', () => fetchData());
     const unsubReqCreated = on('customer.requestCreated', () => fetchData());
     const unsubReqResolved = on('customer.requestResolved', () => fetchData());
     const unsubPayment = on('payment.completed', () => fetchData());
+
+    const unsubOrderStatus = on('order.statusChanged', (payload: any) => {
+      fetchData();
+      // Trigger food-ready alert when order becomes READY
+      if (payload?.status === 'READY' && payload?.id) {
+        addAlert({
+          id: payload.id,
+          orderId: payload.id,
+          orderNumber: payload.orderNumber || payload.id.slice(-6),
+          tableNumber: payload.table?.tableNumber || payload.tableNumber || '?',
+          items: Array.isArray(payload.items)
+            ? payload.items.map((i: any) => ({ name: i.name || i.menuItem?.name || 'Item', quantity: i.quantity }))
+            : [],
+        });
+      }
+    });
+
+    const unsubKitchenReady = on('kitchen.itemReady', (payload: any) => {
+      if (payload?.orderId) {
+        addAlert({
+          id: payload.orderId,
+          orderId: payload.orderId,
+          orderNumber: payload.orderNumber || payload.orderId.slice(-6),
+          tableNumber: payload.tableNumber || '?',
+          items: Array.isArray(payload.items) ? payload.items : [],
+        });
+      }
+    });
 
     return () => {
       unsubOrderCreated();
@@ -115,8 +342,54 @@ export default function WaiterDashboardPage() {
       unsubReqCreated();
       unsubReqResolved();
       unsubPayment();
+      unsubKitchenReady();
     };
-  }, [on, fetchData]);
+  }, [on, fetchData, addAlert]);
+
+  // ── Activate audio on first user gesture ──────────────────
+  useEffect(() => {
+    const activate = () => {
+      userGestured.current = true;
+    };
+    document.addEventListener('click', activate, { once: true });
+    return () => document.removeEventListener('click', activate);
+  }, []);
+
+  // ── Handlers ───────────────────────────────────────────────
+  const handleServeOrder = async (orderId: string) => {
+    if (!token || servingOrderIds.has(orderId)) return;
+    setServingOrderIds((prev) => new Set(prev).add(orderId));
+    try {
+      await waiterService.serveOrder(orderId, token);
+      dismissAlert(orderId);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Could not mark as served');
+    } finally {
+      setServingOrderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  };
+
+  const handleRequestBill = async (tableId: string) => {
+    if (!token || sendingBillIds.has(tableId)) return;
+    setSendingBillIds((prev) => new Set(prev).add(tableId));
+    try {
+      await waiterService.requestBill(tableId, token);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Could not send bill to cashier');
+    } finally {
+      setSendingBillIds((prev) => {
+        const next = new Set(prev);
+        next.delete(tableId);
+        return next;
+      });
+    }
+  };
 
   const handleResolveRequest = async (requestId: string) => {
     if (!token) return;
@@ -128,313 +401,897 @@ export default function WaiterDashboardPage() {
     }
   };
 
-  const handleOpenTableDetails = (table: TableWithOrders) => {
-    setSelectedTable(table);
-    setIsDrawerOpen(true);
-  };
-
-  const handleOpenWalkIn = (tId?: string, tNumber?: string) => {
-    setWalkInTableInfo({ id: tId || '', number: tNumber || '' });
-    setWalkInModalOpen(true);
-  };
-
-  const handleOpenTransfer = (tId: string) => {
-    setTransferSourceId(tId);
-    setTransferModalOpen(true);
-  };
-
-  // Filter Tables
-  const filteredTables = tables.filter((t) => {
-    const matchesSearch =
-      !searchQuery ||
-      t.tableNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.activeOrders.some((o) => o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    if (!matchesSearch) return false;
-    if (statusFilter === 'ALL') return true;
-    if (statusFilter === 'READY_TO_SERVE') return t.status === 'READY_TO_SERVE';
-    if (statusFilter === 'OCCUPIED') return t.status === 'OCCUPIED' || t.status === 'ORDERING' || t.status === 'PREPARING';
-    if (statusFilter === 'AVAILABLE') return t.status === 'AVAILABLE';
-    return t.status === statusFilter;
-  });
-
-  const getTableStatusClasses = (status: string) => {
-    switch (status) {
-      case 'AVAILABLE':
-        return {
-          cardBorder: 'border-slate-800 hover:border-emerald-500/50',
-          badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-          indicator: 'bg-emerald-500',
-        };
-      case 'OCCUPIED':
-      case 'ORDERING':
-      case 'PREPARING':
-        return {
-          cardBorder: 'border-amber-500/30 hover:border-amber-500/60 bg-slate-900/90',
-          badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-          indicator: 'bg-amber-400',
-        };
-      case 'READY_TO_SERVE':
-        return {
-          cardBorder: 'border-yellow-500/70 hover:border-yellow-400 bg-amber-500/5 shadow-lg shadow-yellow-500/10 animate-pulse',
-          badge: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
-          indicator: 'bg-yellow-400 animate-ping',
-        };
-      case 'RESERVED':
-        return {
-          cardBorder: 'border-purple-500/30 hover:border-purple-500/50',
-          badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-          indicator: 'bg-purple-400',
-        };
-      default:
-        return {
-          cardBorder: 'border-slate-800',
-          badge: 'bg-slate-800 text-slate-300 border-slate-700',
-          indicator: 'bg-slate-400',
-        };
+  const handleClockIn = async () => {
+    if (!token || shiftActionLoading) return;
+    setShiftActionLoading(true);
+    try {
+      await waiterService.clockIn(token);
+      const [s, rep] = await Promise.all([
+        waiterService.getShift(token).catch(() => null),
+        waiterService.getPersonalReport(reportRange, token).catch(() => null),
+      ]);
+      if (s) setShiftInfo(s);
+      if (rep) setReportData(rep);
+    } catch (err: any) {
+      alert(err.message || 'Failed to clock in');
+    } finally {
+      setShiftActionLoading(false);
     }
   };
 
-  const pendingRequestsCount = requests.filter((r) => r.status === 'PENDING').length;
+  const handleClockOut = async () => {
+    if (!token || shiftActionLoading) return;
+    setShiftActionLoading(true);
+    try {
+      await waiterService.clockOut(token);
+      const [s, rep] = await Promise.all([
+        waiterService.getShift(token).catch(() => null),
+        waiterService.getPersonalReport(reportRange, token).catch(() => null),
+      ]);
+      if (s) setShiftInfo(s);
+      if (rep) setReportData(rep);
+    } catch (err: any) {
+      alert(err.message || 'Failed to clock out');
+    } finally {
+      setShiftActionLoading(false);
+    }
+  };
 
-  return (
-    <Phase5Layout
-      role="WAITER"
-      title="Waiter Operations Panel"
-      subtitle="Floor table occupancy, live kitchen tickets & guest requests"
-      headerAction={
-        <button
-          onClick={() => handleOpenWalkIn()}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md shadow-amber-500/20 transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Add Walk-in Order</span>
-        </button>
-      }
-    >
-      {/* Top 4 KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Today's Total Orders</span>
-            <Utensils className="w-4 h-4 text-amber-400" />
-          </div>
-          <p className="text-xl font-bold text-white font-mono">{summary.totalOrders}</p>
-          <p className="text-[11px] text-slate-500 mt-1">Dining & walk-in orders</p>
-        </div>
+  const handleRangeChange = async (range: 'today' | 'yesterday' | 'this_week') => {
+    setReportRange(range);
+    if (!token) return;
+    try {
+      const rep = await waiterService.getPersonalReport(range, token);
+      if (rep) setReportData(rep);
+    } catch (err) {
+      console.error('Failed to update report range', err);
+    }
+  };
 
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Served Orders</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-xl font-bold text-emerald-400 font-mono">{summary.servedOrders}</p>
-          <p className="text-[11px] text-slate-500 mt-1">Delivered to guest tables</p>
-        </div>
+  // ── Derived Data ───────────────────────────────────────────
+  const readyOrders = orders.filter((o) => o.status === 'READY');
+  const billTables = tables.filter(
+    (t) =>
+      t.status === 'READY_TO_SERVE' ||
+      requests.some((r) => r.tableId === t.id && r.type === 'BILL_REQUEST' && r.status === 'PENDING')
+  );
 
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Pending Kitchen</span>
-            <Clock className="w-4 h-4 text-yellow-400" />
-          </div>
-          <p className="text-xl font-bold text-yellow-400 font-mono">{summary.pendingOrders}</p>
-          <p className="text-[11px] text-slate-500 mt-1">In kitchen or ready</p>
-        </div>
+  const badgeCounts = {
+    orders: orders.filter((o) => !['SERVED', 'COMPLETED', 'CANCELLED'].includes(o.status)).length,
+    ready: readyOrders.length,
+    bills: billTables.length,
+  };
 
-        <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-          <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-            <span>Today's Sales</span>
-            <TrendingUp className="w-4 h-4 text-purple-400" />
-          </div>
-          <p className="text-xl font-bold text-white font-mono">PKR {summary.todaySales.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-500 mt-1">Settled dining revenue</p>
-        </div>
-      </div>
+  // ── Table Filtering ────────────────────────────────────────
+  const filteredTables = tables.filter((t) => {
+    if (tableFilter === 'free') return t.status === 'AVAILABLE';
+    if (tableFilter === 'occ')
+      return ['OCCUPIED', 'ORDERING', 'PREPARING'].includes(t.status);
+    if (tableFilter === 'bill')
+      return (
+        t.status === 'READY_TO_SERVE' ||
+        requests.some(
+          (r) => r.tableId === t.id && r.type === 'BILL_REQUEST' && r.status === 'PENDING'
+        )
+      );
+    if (tableFilter === 'res') return t.status === 'RESERVED';
+    return true;
+  });
 
-      {/* Guest Assistance Calls Banner */}
-      {requests.length > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 border border-amber-500/30 shadow-lg">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-              </span>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                Customer Assistance Requests ({pendingRequestsCount} Pending)
-              </h3>
-            </div>
+  // ── Filtered Orders ────────────────────────────────────────
+  const filteredOrders =
+    orderStatusFilter === 'ALL'
+      ? orders
+      : orders.filter((o) => o.status === orderStatusFilter);
+
+  // ── Section meta ───────────────────────────────────────────
+  const meta = SECTION_META[activeSection];
+
+  // ===========================================================
+  // RENDER SECTIONS
+  // ===========================================================
+
+  // ── TABLES ─────────────────────────────────────────────────
+  const renderTables = () => {
+    const TABLE_FILTERS: { id: TableFilter; label: string }[] = [
+      { id: 'all', label: 'All Tables' },
+      { id: 'free', label: 'Free' },
+      { id: 'occ', label: 'Occupied' },
+      { id: 'bill', label: 'Bill Requested' },
+      { id: 'res', label: 'Reserved' },
+    ];
+
+    return (
+      <div>
+        {/* Filter pills */}
+        <div className="flex items-center gap-2 flex-wrap mb-5">
+          {TABLE_FILTERS.map((f) => (
             <button
-              onClick={fetchData}
-              className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+              key={f.id}
+              onClick={() => setTableFilter(f.id)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all"
+              style={
+                tableFilter === f.id
+                  ? { background: C.gold, color: '#0B0B0D', fontWeight: 700 }
+                  : {
+                      background: C.card,
+                      color: C.textMuted,
+                      border: `1px solid ${C.border}`,
+                    }
+              }
             >
-              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
+              {f.label}
             </button>
-          </div>
+          ))}
+          <div className="flex-1" />
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs transition-all"
+            style={{ background: C.raised, color: C.textMuted, border: `1px solid ${C.border}` }}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            {requests.map((req) => (
+        {loading ? (
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}>
+            {[...Array(8)].map((_, i) => (
               <div
-                key={req.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-amber-500/20 text-xs"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">Table {req.tableNumber}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
-                      {req.type.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  {req.message && <p className="text-[11px] text-slate-400 mt-0.5">{req.message}</p>}
-                </div>
-
-                <button
-                  onClick={() => handleResolveRequest(req.id)}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-semibold transition-all active:scale-95"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Resolve</span>
-                </button>
-              </div>
+                key={i}
+                className="h-48 rounded-2xl animate-pulse"
+                style={{ background: C.card, border: `1px solid ${C.border}` }}
+              />
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-5">
-        {/* Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto">
-          {[
-            { id: 'ALL', label: 'All Tables' },
-            { id: 'READY_TO_SERVE', label: 'Ready to Serve' },
-            { id: 'OCCUPIED', label: 'Occupied' },
-            { id: 'AVAILABLE', label: 'Available' },
-            { id: 'RESERVED', label: 'Reserved' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
-                statusFilter === tab.id
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm shadow-amber-500/20'
-                  : 'bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search table or order #..."
-            className="w-full bg-slate-900 border border-slate-800 text-xs rounded-xl pl-8 pr-3 py-1.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-colors"
+        ) : filteredTables.length === 0 ? (
+          <EmptyState
+            icon={<Utensils className="w-10 h-10" />}
+            title="No tables found"
+            subtitle="Try a different filter"
           />
-        </div>
-      </div>
+        ) : (
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}
+          >
+            {filteredTables.map((tbl) => {
+              const hasBillReq = requests.some(
+                (r) => r.tableId === tbl.id && r.type === 'BILL_REQUEST' && r.status === 'PENDING'
+              );
+              const isBill = tbl.status === 'READY_TO_SERVE' || hasBillReq;
+              const isReady = tbl.status === 'READY_TO_SERVE';
+              const isOcc = ['OCCUPIED', 'ORDERING', 'PREPARING'].includes(tbl.status);
+              const isRes = tbl.status === 'RESERVED';
+              const isFree = tbl.status === 'AVAILABLE';
+              const primaryOrder = tbl.activeOrders[0];
 
-      {/* Table Grid (Reference Visual Source of Truth) */}
-      {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="h-44 bg-slate-900/60 rounded-2xl border border-slate-800/80"></div>
-          ))}
-        </div>
-      ) : filteredTables.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80">
-          <Utensils className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <h3 className="text-sm font-bold text-white">No dining tables found</h3>
-          <p className="text-xs text-slate-400 mt-1">Try resetting the status filter or search query.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredTables.map((tbl) => {
-            const styles = getTableStatusClasses(tbl.status);
-            const isReady = tbl.status === 'READY_TO_SERVE';
-            const isOccupied = tbl.status !== 'AVAILABLE';
-            const primaryOrder = tbl.activeOrders[0];
+              let borderColor: string = C.border;
+              let dotColor: string = C.textMuted;
+              let statusText = tbl.status.replace(/_/g, ' ');
+              if (isFree) { borderColor = '#5BBFAE40'; dotColor = '#5BBFAE'; }
+              else if (isBill) { borderColor = '#E7855A50'; dotColor = C.orange; }
+              else if (isOcc) { borderColor = `${C.gold}40`; dotColor = C.gold; }
+              else if (isRes) { borderColor = `${C.blue}40`; dotColor = C.blue; }
 
-            return (
-              <div
-                key={tbl.id}
-                onClick={() => handleOpenTableDetails(tbl)}
-                className={`group relative bg-slate-900/90 border rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:-translate-y-0.5 shadow-sm backdrop-blur-md ${styles.cardBorder}`}
-              >
-                {/* Top Row: Table Number & Seats */}
-                <div>
+              return (
+                <div
+                  key={tbl.id}
+                  onClick={() => { setSelectedTable(tbl); setIsDrawerOpen(true); }}
+                  className="rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-150 hover:-translate-y-0.5 group"
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${borderColor}`,
+                    boxShadow: isReady ? `0 4px 24px rgba(91,191,174,0.12)` : undefined,
+                  }}
+                >
+                  {/* Header row */}
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-white tracking-wide uppercase">
-                      TABLE {tbl.tableNumber}
+                    <span
+                      className="text-base font-semibold"
+                      style={{
+                        color: C.gold,
+                        fontFamily: 'Playfair Display, Georgia, serif',
+                      }}
+                    >
+                      T{tbl.tableNumber}
                     </span>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
-                      <Users className="w-3 h-3 text-slate-500" />
-                      {tbl.capacity} Seats
+                    <span className="flex items-center gap-1 text-[11px]" style={{ color: C.textMuted }}>
+                      <Users className="w-3 h-3" />
+                      {tbl.capacity}
                     </span>
                   </div>
 
-                  {/* Center Visual Badge & Status */}
-                  <div className="my-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${styles.indicator}`}></span>
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${styles.badge}`}
-                      >
-                        {tbl.status.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-
+                  {/* Status */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background: dotColor,
+                        boxShadow: isReady ? `0 0 6px ${dotColor}` : undefined,
+                      }}
+                    />
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                      style={{
+                        background: `${dotColor}20`,
+                        color: dotColor,
+                        border: `1px solid ${dotColor}30`,
+                      }}
+                    >
+                      {statusText}
+                    </span>
                     {tbl.elapsedMinutes > 0 && (
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 text-slate-500" />
+                      <span className="ml-auto text-[10px]" style={{ color: C.textMuted }}>
+                        <Clock className="w-3 h-3 inline mr-0.5" />
                         {tbl.elapsedMinutes}m
                       </span>
                     )}
                   </div>
 
-                  {/* Order Preview if Occupied */}
-                  {isOccupied && primaryOrder ? (
-                    <div className="pt-2.5 border-t border-slate-800/80 text-xs space-y-1">
+                  {/* Order summary */}
+                  {primaryOrder ? (
+                    <div
+                      className="border-t pt-2.5 text-xs space-y-1"
+                      style={{ borderColor: C.border }}
+                    >
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-slate-200 truncate pr-1">
-                          #{primaryOrder.orderNumber}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {primaryOrder.itemsCount} Items
-                        </span>
+                        <span style={{ color: C.textMuted }}>#{primaryOrder.orderNumber}</span>
+                        <span style={{ color: C.textMuted }}>{primaryOrder.itemsCount} items</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[11px] text-slate-400">Total:</span>
-                        <span className="font-bold text-amber-400 font-mono">
+                        <span style={{ color: C.textMuted }}>Total</span>
+                        <span
+                          className="font-bold"
+                          style={{ color: C.gold }}
+                        >
                           PKR {tbl.totalAmount.toLocaleString()}
                         </span>
                       </div>
                     </div>
                   ) : (
-                    <div className="pt-2.5 border-t border-slate-800/60 text-xs text-slate-500 italic flex items-center justify-center py-2">
-                      Table ready for seating
+                    <div
+                      className="border-t pt-2 text-xs text-center italic"
+                      style={{ borderColor: C.border, color: C.textMuted }}
+                    >
+                      Ready for seating
                     </div>
                   )}
-                </div>
 
-                {/* Bottom Card Action */}
-                <div className="mt-3 pt-2 flex items-center justify-between border-t border-slate-850 text-xs font-semibold">
-                  <span className="text-slate-400 group-hover:text-amber-400 transition-colors">
-                    {isOccupied ? 'View Details' : 'Seat Guests'}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
+                  {/* CTA row */}
+                  <div
+                    className="flex items-center justify-between mt-3 pt-2 border-t text-xs font-semibold"
+                    style={{ borderColor: C.border }}
+                  >
+                    {/* Quick action buttons */}
+                    {isFree ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWalkInTableInfo({ id: tbl.id, number: tbl.tableNumber });
+                          setWalkInModalOpen(true);
+                        }}
+                        className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all active:scale-95"
+                        style={{ background: C.gold, color: '#0B0B0D' }}
+                      >
+                        Start order
+                      </button>
+                    ) : isBill ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(tbl);
+                          setActiveSection('bills');
+                        }}
+                        className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                        style={{
+                          background: `${C.orange}20`,
+                          color: C.orange,
+                          border: `1px solid ${C.orange}40`,
+                        }}
+                      >
+                        Open bill
+                      </button>
+                    ) : isRes ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWalkInTableInfo({ id: tbl.id, number: tbl.tableNumber });
+                          setWalkInModalOpen(true);
+                        }}
+                        className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                        style={{ background: C.raised, color: C.blue, border: `1px solid ${C.blue}40` }}
+                      >
+                        Seat guests
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTable(tbl);
+                          setIsDrawerOpen(true);
+                        }}
+                        className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all"
+                        style={{ background: C.raised, color: C.textMuted, border: `1px solid ${C.border}` }}
+                      >
+                        Add items
+                      </button>
+                    )}
+                    <ChevronRight
+                      className="w-4 h-4 group-hover:translate-x-0.5 transition-transform"
+                      style={{ color: C.textMuted }}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── ORDERS ─────────────────────────────────────────────────
+  const renderOrders = () => {
+    const statusOptions = ['ALL', 'PENDING', 'RECEIVED', 'PREPARING', 'READY', 'SERVED'];
+    return (
+      <div>
+        {/* Filter pills */}
+        <div className="flex items-center gap-2 flex-wrap mb-5">
+          {statusOptions.map((s) => (
+            <button
+              key={s}
+              onClick={() => setOrderStatusFilter(s)}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+              style={
+                orderStatusFilter === s
+                  ? { background: C.gold, color: '#0B0B0D', fontWeight: 700 }
+                  : { background: C.card, color: C.textMuted, border: `1px solid ${C.border}` }
+              }
+            >
+              {s === 'ALL' ? 'All' : statusLabel(s)}
+            </button>
+          ))}
         </div>
-      )}
+
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="h-20 rounded-2xl animate-pulse"
+                style={{ background: C.card, border: `1px solid ${C.border}` }}
+              />
+            ))}
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <EmptyState
+            icon={<Utensils className="w-10 h-10" />}
+            title="No orders"
+            subtitle="Orders will appear here when placed"
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {filteredOrders.map((o) => {
+              const statusColor = getStatusColor(o.status);
+              const created = o.createdAt ? minutesAgo(o.createdAt) : 0;
+              const itemsPreview = Array.isArray(o.items)
+                ? o.items.map((i: any) => `${i.name || i.menuItem?.name} ×${i.quantity}`).join(', ')
+                : '';
+              return (
+                <div
+                  key={o.id}
+                  className="flex items-center gap-4 px-4 py-3 rounded-2xl transition-all"
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${C.border}`,
+                  }}
+                >
+                  {/* Table indicator */}
+                  <div
+                    className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${C.gold}18` }}
+                  >
+                    <span
+                      className="text-lg font-semibold"
+                      style={{ color: C.gold, fontFamily: 'Playfair Display, Georgia, serif' }}
+                    >
+                      {o.tableNumber || o.table?.tableNumber || '—'}
+                    </span>
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+                        #{o.orderNumber || o.id?.slice(-6)}
+                      </span>
+                      <StatusBadge status={o.status} />
+                    </div>
+                    <p className="text-xs truncate mb-1" style={{ color: C.textMuted }}>
+                      {itemsPreview || 'No items'}
+                    </p>
+                    <p className="text-[11px]" style={{ color: C.textMuted }}>
+                      {elapsedLabel(created)}
+                      {o.createdAt ? ` · ${formatTime(o.createdAt)}` : ''}
+                    </p>
+                  </div>
+
+                  {/* Total */}
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold" style={{ color: C.gold }}>
+                      PKR {(o.total || o.totalAmount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── READY TO SERVE ─────────────────────────────────────────
+  const renderReady = () => {
+    return (
+      <div>
+        {readyOrders.length === 0 ? (
+          <EmptyState
+            icon={<CheckCircle2 className="w-10 h-10" />}
+            title="All caught up"
+            subtitle="No orders ready for delivery right now"
+          />
+        ) : (
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
+          >
+            {readyOrders.map((o) => {
+              const readyMinutes = o.readyAt ? minutesAgo(o.readyAt) : o.updatedAt ? minutesAgo(o.updatedAt) : 0;
+              const isServing = servingOrderIds.has(o.id);
+              const itemsPreview = Array.isArray(o.items) ? o.items : [];
+
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-2xl p-5 flex flex-col gap-3"
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${C.teal}50`,
+                    boxShadow: `0 4px 20px rgba(91,191,174,0.1)`,
+                  }}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span
+                        className="text-base font-semibold"
+                        style={{
+                          color: C.textPrimary,
+                          fontFamily: 'Playfair Display, Georgia, serif',
+                        }}
+                      >
+                        Table {o.tableNumber || o.table?.tableNumber || '—'}
+                      </span>
+                      <p className="text-xs" style={{ color: C.textMuted }}>
+                        #{o.orderNumber || o.id?.slice(-6)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className="text-xs font-semibold px-2 py-1 rounded-full"
+                        style={{ background: `${C.teal}20`, color: C.teal }}
+                      >
+                        Ready {readyMinutes > 0 ? `${readyMinutes}m ago` : 'just now'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Items */}
+                  {itemsPreview.length > 0 && (
+                    <ul className="space-y-1">
+                      {itemsPreview.map((item: any, idx: number) => (
+                        <li
+                          key={idx}
+                          className="flex items-center justify-between text-xs"
+                          style={{ color: C.textMuted }}
+                        >
+                          <span>
+                            {item.name || item.menuItem?.name || 'Item'} ×{item.quantity}
+                          </span>
+                          {item.subtotal != null && (
+                            <span style={{ color: C.textPrimary }}>
+                              PKR {item.subtotal.toLocaleString()}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Total */}
+                  <div
+                    className="flex justify-between items-center border-t pt-2"
+                    style={{ borderColor: C.border }}
+                  >
+                    <span className="text-xs" style={{ color: C.textMuted }}>
+                      Total
+                    </span>
+                    <span className="text-sm font-bold" style={{ color: C.gold }}>
+                      PKR {(o.total || o.totalAmount || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Mark as Served */}
+                  <button
+                    onClick={() => handleServeOrder(o.id)}
+                    disabled={isServing}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-center gap-2"
+                    style={{
+                      background: isServing ? `${C.gold}60` : C.gold,
+                      color: '#0B0B0D',
+                      cursor: isServing ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isServing ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    {isServing ? 'Marking served…' : 'Mark as Served'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── BILLS ──────────────────────────────────────────────────
+  const renderBills = () => {
+    return (
+      <div>
+        {billTables.length === 0 ? (
+          <EmptyState
+            icon={<Receipt className="w-10 h-10" />}
+            title="No pending bills"
+            subtitle="Tables requesting bills will appear here"
+          />
+        ) : (
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}
+          >
+            {billTables.map((tbl) => {
+              const isSending = sendingBillIds.has(tbl.id);
+              const method = paymentMethods[tbl.id] || 'Cash';
+              const primaryOrder = tbl.activeOrders[0];
+
+              // Use API-calculated totals — do NOT recalculate in browser
+              const subtotal = primaryOrder ? (tbl.totalAmount * 100) / 116 : 0; // rough GST reverse if no subtotal field
+              const total = tbl.totalAmount;
+
+              return (
+                <div
+                  key={tbl.id}
+                  className="rounded-2xl p-5 flex flex-col gap-4"
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${C.orange}40`,
+                    boxShadow: `0 4px 20px rgba(231,133,90,0.08)`,
+                  }}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span
+                        className="text-base font-semibold"
+                        style={{
+                          color: C.textPrimary,
+                          fontFamily: 'Playfair Display, Georgia, serif',
+                        }}
+                      >
+                        Table {tbl.tableNumber}
+                      </span>
+                      <p className="text-xs" style={{ color: C.textMuted }}>
+                        {tbl.capacity} seats · {tbl.activeOrdersCount} order(s)
+                      </p>
+                    </div>
+                    <span
+                      className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: `${C.orange}20`, color: C.orange }}
+                    >
+                      Bill Requested
+                    </span>
+                  </div>
+
+                  {/* Order items summary */}
+                  {primaryOrder && primaryOrder.items.length > 0 && (
+                    <ul className="space-y-1">
+                      {primaryOrder.items.slice(0, 5).map((item: any, idx: number) => (
+                        <li
+                          key={idx}
+                          className="flex items-center justify-between text-xs"
+                          style={{ color: C.textMuted }}
+                        >
+                          <span>
+                            {item.name} ×{item.quantity}
+                          </span>
+                          <span style={{ color: C.textPrimary }}>
+                            PKR {(item.subtotal || item.unitPrice * item.quantity || 0).toLocaleString()}
+                          </span>
+                        </li>
+                      ))}
+                      {primaryOrder.items.length > 5 && (
+                        <li className="text-[11px]" style={{ color: C.textMuted }}>
+                          +{primaryOrder.items.length - 5} more items
+                        </li>
+                      )}
+                    </ul>
+                  )}
+
+                  {/* Total */}
+                  <div
+                    className="flex justify-between items-center border-t pt-2"
+                    style={{ borderColor: C.border }}
+                  >
+                    <span className="text-xs" style={{ color: C.textMuted }}>
+                      Total
+                    </span>
+                    <span className="text-base font-bold" style={{ color: C.gold }}>
+                      PKR {total.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Payment method pills */}
+                  <div className="flex gap-2">
+                    {(['Cash', 'Card', 'Online'] as PaymentMethod[]).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() =>
+                          setPaymentMethods((prev) => ({ ...prev, [tbl.id]: m }))
+                        }
+                        className="flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                        style={
+                          method === m
+                            ? { background: `${C.gold}25`, color: C.gold, border: `1px solid ${C.gold}60` }
+                            : {
+                                background: C.raised,
+                                color: C.textMuted,
+                                border: `1px solid ${C.border}`,
+                              }
+                        }
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Send to cashier */}
+                  <button
+                    onClick={() => handleRequestBill(tbl.id)}
+                    disabled={isSending}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 flex items-center justify-center gap-2"
+                    style={{
+                      background: isSending ? `${C.orange}60` : C.orange,
+                      color: '#0B0B0D',
+                      cursor: isSending ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isSending ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4" />
+                    )}
+                    {isSending ? 'Sending…' : 'Send to Cashier'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── PROFILE ────────────────────────────────────────────────
+  const renderProfile = () => {
+    const name = user?.name || user?.email || 'Waiter';
+    const role = user?.role || 'WAITER';
+    const initials = name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    const activeTables = tables.filter((t) => t.status !== 'AVAILABLE' && t.status !== 'RESERVED');
+
+    return (
+      <div className="max-w-2xl mx-auto space-y-5">
+        {/* Avatar card */}
+        <div
+          className="rounded-2xl p-6 flex flex-col items-center gap-3"
+          style={{ background: C.card, border: `1px solid ${C.border}` }}
+        >
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold"
+            style={{ background: C.gold, color: '#0B0B0D' }}
+          >
+            {initials}
+          </div>
+          <div className="text-center">
+            <h3
+              className="text-xl font-semibold"
+              style={{ color: C.textPrimary, fontFamily: 'Playfair Display, Georgia, serif' }}
+            >
+              {name}
+            </h3>
+            <p className="text-sm mt-0.5" style={{ color: C.textMuted }}>
+              {role.charAt(0) + role.slice(1).toLowerCase()} · Silver Sapoon
+            </p>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Tables Served', value: summary.servedOrders, color: C.teal },
+            { label: 'Orders Taken', value: summary.totalOrders, color: C.gold },
+            { label: 'Avg Serve Time', value: 'N/A', color: C.textMuted, note: 'Not tracked' },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="rounded-2xl p-4 text-center"
+              style={{ background: C.card, border: `1px solid ${C.border}` }}
+            >
+              <p
+                className="text-2xl font-bold mb-1"
+                style={{ color: s.color }}
+              >
+                {s.value}
+              </p>
+              <p className="text-xs" style={{ color: C.textMuted }}>
+                {s.label}
+              </p>
+              {s.note && (
+                <p className="text-[10px] mt-0.5" style={{ color: C.textMuted }}>
+                  {s.note}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Active tables */}
+        {activeTables.length > 0 && (
+          <div
+            className="rounded-2xl p-4"
+            style={{ background: C.card, border: `1px solid ${C.border}` }}
+          >
+            <h4
+              className="text-sm font-semibold mb-3"
+              style={{ color: C.textPrimary }}
+            >
+              Assigned Active Tables
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {activeTables.map((t) => (
+                <span
+                  key={t.id}
+                  className="px-3 py-1 rounded-full text-xs font-semibold"
+                  style={{ background: `${C.gold}20`, color: C.gold, border: `1px solid ${C.gold}40` }}
+                >
+                  T{t.tableNumber}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Customer requests */}
+        {requests.filter((r) => r.status === 'PENDING').length > 0 && (
+          <div
+            className="rounded-2xl p-4"
+            style={{ background: C.card, border: `1px solid ${C.border}` }}
+          >
+            <h4 className="text-sm font-semibold mb-3" style={{ color: C.textPrimary }}>
+              Pending Requests ({requests.filter((r) => r.status === 'PENDING').length})
+            </h4>
+            <div className="space-y-2">
+              {requests
+                .filter((r) => r.status === 'PENDING')
+                .map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between p-3 rounded-xl text-xs"
+                    style={{ background: C.raised, border: `1px solid ${C.border}` }}
+                  >
+                    <div>
+                      <span className="font-semibold" style={{ color: C.textPrimary }}>
+                        Table {req.tableNumber}
+                      </span>
+                      <span className="ml-2" style={{ color: C.textMuted }}>
+                        {req.type.replace(/_/g, ' ')}
+                      </span>
+                      {req.message && (
+                        <p style={{ color: C.textMuted }} className="mt-0.5">
+                          {req.message}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleResolveRequest(req.id)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: 'rgba(34,197,94,0.15)',
+                        color: '#22c55e',
+                        border: '1px solid rgba(34,197,94,0.3)',
+                      }}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Resolve
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sign out */}
+        <button
+          onClick={() => logout?.()}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all"
+          style={{
+            background: C.raised,
+            color: '#EF4444',
+            border: '1px solid rgba(239,68,68,0.3)',
+          }}
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </button>
+      </div>
+    );
+  };
+
+  // ===========================================================
+  // MAIN RENDER
+  // ===========================================================
+  return (
+    <>
+      <WaiterLayout
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        badgeCounts={badgeCounts}
+        userName={user?.name || user?.email || 'Waiter'}
+        userRole={user?.role || 'WAITER'}
+        connectionStatus={connectionStatus}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled((p) => !p)}
+        sectionTitle={meta.title}
+        sectionSubtitle={meta.subtitle}
+      >
+        {activeSection === 'tables' && renderTables()}
+        {activeSection === 'orders' && renderOrders()}
+        {activeSection === 'ready' && renderReady()}
+        {activeSection === 'bills' && renderBills()}
+        {activeSection === 'profile' && renderProfile()}
+      </WaiterLayout>
+
+      {/* Food Ready Toast Alerts */}
+      <FoodReadyAlert
+        notifications={notifications}
+        onDismiss={dismissAlert}
+        onView={(orderId) => {
+          dismissAlert(orderId);
+          setActiveSection('ready');
+        }}
+        soundEnabled={soundEnabled}
+      />
 
       {/* Slide-over Table Detail Drawer */}
       <TableDetailDrawer
@@ -446,11 +1303,13 @@ export default function WaiterDashboardPage() {
         onRefresh={fetchData}
         onOpenWalkIn={(tId, tNum) => {
           setIsDrawerOpen(false);
-          handleOpenWalkIn(tId, tNum);
+          setWalkInTableInfo({ id: tId, number: tNum });
+          setWalkInModalOpen(true);
         }}
         onOpenTransfer={(tId) => {
           setIsDrawerOpen(false);
-          handleOpenTransfer(tId);
+          setTransferSourceId(tId);
+          setTransferModalOpen(true);
         }}
       />
 
@@ -476,6 +1335,6 @@ export default function WaiterDashboardPage() {
         onClose={() => setTransferModalOpen(false)}
         onSuccess={() => fetchData()}
       />
-    </Phase5Layout>
+    </>
   );
 }

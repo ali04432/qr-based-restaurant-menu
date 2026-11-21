@@ -1004,4 +1004,337 @@ router.post('/ai/query', async (req: AuthenticatedRequest, res: Response, next: 
   }
 });
 
+/**
+ * GET /api/waiter/me/shift
+ * Get authenticated waiter's shift schedule, status, and actual attendance
+ */
+router.get('/me/shift', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const userId = req.user!.id;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const logs = await prisma.staffActionLog.findMany({
+      where: {
+        restaurantId,
+        userId,
+        action: { in: ['CLOCK_IN', 'CLOCK_OUT'] },
+        createdAt: { gte: startOfToday },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    const clockInLog = logs.find((l) => l.action === 'CLOCK_IN');
+    const clockOutLog = logs.find((l) => l.action === 'CLOCK_OUT');
+
+    let shiftStatus: 'ON_DUTY' | 'OFF_DUTY' | 'COMPLETED' = 'OFF_DUTY';
+    let workingMinutes = 0;
+
+    if (clockInLog && (!clockOutLog || clockInLog.createdAt > clockOutLog.createdAt)) {
+      shiftStatus = 'ON_DUTY';
+      workingMinutes = Math.max(0, Math.floor((Date.now() - clockInLog.createdAt.getTime()) / 60000));
+    } else if (clockInLog && clockOutLog && clockOutLog.createdAt >= clockInLog.createdAt) {
+      shiftStatus = 'COMPLETED';
+      workingMinutes = Math.max(0, Math.floor((clockOutLog.createdAt.getTime() - clockInLog.createdAt.getTime()) / 60000));
+    }
+
+    const recentTableLogs = await prisma.staffActionLog.findMany({
+      where: {
+        restaurantId,
+        userId,
+        action: { in: ['TABLE_OCCUPIED', 'ORDER_CREATED', 'ORDER_SERVED'] },
+        createdAt: { gte: startOfToday },
+      },
+      take: 20,
+    });
+
+    const assignedCount = new Set(
+      recentTableLogs
+        .map((l) => l.details?.match(/Table\s+([A-Za-z0-9_-]+)/i)?.[1])
+        .filter(Boolean)
+    ).size;
+
+    return sendSuccess(res, {
+      userId,
+      userName: req.user!.name,
+      shiftDate: startOfToday.toISOString().slice(0, 10),
+      scheduledStart: '12:00 PM',
+      scheduledEnd: '08:00 PM',
+      clockInTime: clockInLog?.createdAt.toISOString() || null,
+      clockOutTime: clockOutLog?.createdAt.toISOString() || null,
+      workingMinutes,
+      shiftStatus,
+      assignedTablesCount: assignedCount,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /api/waiter/me/shift/clock-in
+ * Record waiter clock-in for the current shift
+ */
+router.post('/me/shift/clock-in', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const userId = req.user!.id;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const existingActive = await prisma.staffActionLog.findFirst({
+      where: {
+        restaurantId,
+        userId,
+        action: 'CLOCK_IN',
+        createdAt: { gte: startOfToday },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const existingClockOut = await prisma.staffActionLog.findFirst({
+      where: {
+        restaurantId,
+        userId,
+        action: 'CLOCK_OUT',
+        createdAt: { gte: startOfToday },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingActive && (!existingClockOut || existingActive.createdAt > existingClockOut.createdAt)) {
+      return sendSuccess(res, {
+        message: 'Already clocked in',
+        clockInTime: existingActive.createdAt.toISOString(),
+        shiftStatus: 'ON_DUTY',
+      });
+    }
+
+    const log = await prisma.staffActionLog.create({
+      data: {
+        restaurantId,
+        userId,
+        action: 'CLOCK_IN',
+        details: `Waiter ${req.user!.name} clocked in at ${new Date().toLocaleTimeString()}`,
+      },
+    });
+
+    return sendCreated(res, {
+      message: 'Clocked in successfully',
+      clockInTime: log.createdAt.toISOString(),
+      shiftStatus: 'ON_DUTY',
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /api/waiter/me/shift/clock-out
+ * Record waiter clock-out for the current shift
+ */
+router.post('/me/shift/clock-out', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const userId = req.user!.id;
+
+    const log = await prisma.staffActionLog.create({
+      data: {
+        restaurantId,
+        userId,
+        action: 'CLOCK_OUT',
+        details: `Waiter ${req.user!.name} clocked out at ${new Date().toLocaleTimeString()}`,
+      },
+    });
+
+    return sendSuccess(res, {
+      message: 'Clocked out successfully',
+      clockOutTime: log.createdAt.toISOString(),
+      shiftStatus: 'COMPLETED',
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * GET /api/waiter/me/report
+ * Scoped individual waiter daily performance report
+ */
+router.get('/me/report', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const userId = req.user!.id;
+    const range = (req.query.range as string) || 'today';
+
+    const now = new Date();
+    let fromDate = new Date();
+    let toDate = new Date();
+
+    if (range === 'yesterday') {
+      fromDate.setDate(now.getDate() - 1);
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setDate(now.getDate() - 1);
+      toDate.setHours(23, 59, 59, 999);
+    } else if (range === 'this_week') {
+      fromDate.setDate(now.getDate() - 7);
+      fromDate.setHours(0, 0, 0, 0);
+    } else if (range === 'all') {
+      fromDate = new Date(0);
+    } else {
+      fromDate.setHours(0, 0, 0, 0);
+    }
+
+    const [staffLogs, orderEvents, resolvedRequests] = await Promise.all([
+      prisma.staffActionLog.findMany({
+        where: {
+          restaurantId,
+          userId,
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      (prisma as any).orderEvent.findMany({
+        where: {
+          restaurantId,
+          userId,
+          statusTo: 'SERVED',
+          createdAt: { gte: fromDate, lte: toDate },
+        },
+        include: {
+          order: {
+            include: { items: true },
+          },
+        },
+      }),
+      prisma.customerRequest.findMany({
+        where: {
+          restaurantId,
+          assignedToId: userId,
+          status: 'RESOLVED',
+          resolvedAt: { gte: fromDate, lte: toDate },
+        },
+      }),
+    ]);
+
+    const ordersTaken = staffLogs.filter((l) => l.action === 'ORDER_CREATED').length;
+    const billsRequested = staffLogs.filter((l) => l.action === 'BILL_REQUESTED').length;
+    const tablesServedCount = new Set(orderEvents.map((e: any) => e.orderId)).size;
+    const itemsServedCount = orderEvents.reduce((acc: number, e: any) => {
+      const items = e.order?.items || [];
+      return acc + items.reduce((s: number, i: any) => s + (i.quantity || 1), 0);
+    }, 0);
+
+    const tablesHandledSet = new Set<string>();
+    staffLogs.forEach((l) => {
+      const match = l.details?.match(/Table\s+([A-Za-z0-9_-]+)/i);
+      if (match) tablesHandledSet.add(match[1]);
+    });
+    orderEvents.forEach((e: any) => {
+      if (e.order?.tableId) tablesHandledSet.add(e.order.tableId);
+    });
+
+    const clockInLogs = staffLogs.filter((l) => l.action === 'CLOCK_IN');
+    const clockOutLogs = staffLogs.filter((l) => l.action === 'CLOCK_OUT');
+    let totalWorkingMinutes = 0;
+    if (clockInLogs.length > 0) {
+      const latestIn = clockInLogs[0];
+      const latestOut = clockOutLogs.find((o) => o.createdAt >= latestIn.createdAt);
+      if (latestOut) {
+        totalWorkingMinutes = Math.floor((latestOut.createdAt.getTime() - latestIn.createdAt.getTime()) / 60000);
+      } else {
+        totalWorkingMinutes = Math.floor((Date.now() - latestIn.createdAt.getTime()) / 60000);
+      }
+    }
+
+    return sendSuccess(res, {
+      waiterId: userId,
+      waiterName: req.user!.name,
+      role: req.user!.role,
+      restaurantId,
+      range,
+      dateRange: {
+        from: fromDate.toISOString(),
+        to: toDate.toISOString(),
+      },
+      metrics: {
+        tablesHandled: tablesHandledSet.size,
+        tablesServed: tablesServedCount,
+        ordersTaken,
+        itemsServed: itemsServedCount,
+        billsRequested,
+        requestsResolved: resolvedRequests.length,
+        workingHours: parseFloat((totalWorkingMinutes / 60).toFixed(1)),
+      },
+      recentActivity: staffLogs.slice(0, 10).map((l) => ({
+        id: l.id,
+        action: l.action,
+        details: l.details,
+        createdAt: l.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * GET /api/waiter/reports/summary
+ * Consolidated manager/admin view of all active waiters in restaurant
+ */
+router.get('/reports/summary', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const restaurantId = getRestaurantId(req);
+    if (![UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN].includes(req.user!.role as any)) {
+      return next(new AppError('Forbidden: Manager or Admin permissions required', 403, 'FORBIDDEN'));
+    }
+
+    const waiters = await prisma.user.findMany({
+      where: { restaurantId, role: 'WAITER' as any, status: 'ACTIVE' },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [staffLogs, orderEvents] = await Promise.all([
+      prisma.staffActionLog.findMany({
+        where: { restaurantId, createdAt: { gte: startOfToday } },
+      }),
+      (prisma as any).orderEvent.findMany({
+        where: { restaurantId, statusTo: 'SERVED', createdAt: { gte: startOfToday } },
+      }),
+    ]);
+
+    const waiterStats = waiters.map((w) => {
+      const logs = staffLogs.filter((l) => l.userId === w.id);
+      const events = orderEvents.filter((e: any) => e.userId === w.id);
+      const ordersTaken = logs.filter((l) => l.action === 'ORDER_CREATED').length;
+      const tablesServed = new Set(events.map((e: any) => e.orderId)).size;
+      const billsRequested = logs.filter((l) => l.action === 'BILL_REQUESTED').length;
+      const clockIn = logs.find((l) => l.action === 'CLOCK_IN');
+      const clockOut = logs.find((l) => l.action === 'CLOCK_OUT');
+      const isOnline = clockIn && (!clockOut || clockIn.createdAt > clockOut.createdAt);
+
+      return {
+        id: w.id,
+        name: w.name,
+        email: w.email,
+        status: isOnline ? 'ON_DUTY' : 'OFF_DUTY',
+        ordersTaken,
+        tablesServed,
+        billsRequested,
+      };
+    });
+
+    return sendSuccess(res, waiterStats);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;

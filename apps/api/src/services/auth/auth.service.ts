@@ -65,6 +65,10 @@ export async function loginUser(input: LoginInput): Promise<AuthResponse> {
     throw errors.unauthorized('Invalid email or password');
   }
 
+  if (user.status && (user.status as string) !== 'ACTIVE') {
+    throw new AppError('Account is inactive or suspended. Please contact management.', 403, 'ACCOUNT_DISABLED');
+  }
+
   const isPasswordValid = await comparePassword(input.password, user.passwordHash);
   if (!isPasswordValid) {
     throw errors.unauthorized('Invalid email or password');

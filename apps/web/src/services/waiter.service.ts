@@ -14,6 +14,43 @@ import {
 // Phase 5: Waiter API Client Service
 // ============================================================
 
+export interface WaiterShiftInfo {
+  userId: string;
+  userName: string;
+  shiftDate: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  clockInTime: string | null;
+  clockOutTime: string | null;
+  workingMinutes: number;
+  shiftStatus: 'ON_DUTY' | 'OFF_DUTY' | 'COMPLETED';
+  assignedTablesCount: number;
+}
+
+export interface WaiterPersonalReport {
+  waiterId: string;
+  waiterName: string;
+  role: string;
+  restaurantId: string;
+  range: string;
+  dateRange: { from: string; to: string };
+  metrics: {
+    tablesHandled: number;
+    tablesServed: number;
+    ordersTaken: number;
+    itemsServed: number;
+    billsRequested: number;
+    requestsResolved: number;
+    workingHours: number;
+  };
+  recentActivity: Array<{
+    id: string;
+    action: string;
+    details: string | null;
+    createdAt: string;
+  }>;
+}
+
 export const waiterService = {
   /** Fetch real-time waiter summary KPIs */
   async getSummary(restaurantId: string, token: string): Promise<WaiterSummary> {
@@ -117,5 +154,30 @@ export const waiterService = {
   /** Query Waiter AI operational assistant */
   async queryAi(query: string, token: string): Promise<OperationalAiResponse> {
     return apiClient.post<OperationalAiResponse>('/api/waiter/ai/query', { query, role: 'WAITER' }, { token });
+  },
+
+  /** Get individual shift & attendance */
+  async getShift(token: string): Promise<WaiterShiftInfo> {
+    return apiClient.get<WaiterShiftInfo>('/api/waiter/me/shift', { token });
+  },
+
+  /** Clock in for shift */
+  async clockIn(token: string): Promise<any> {
+    return apiClient.post<any>('/api/waiter/me/shift/clock-in', {}, { token });
+  },
+
+  /** Clock out from shift */
+  async clockOut(token: string): Promise<any> {
+    return apiClient.post<any>('/api/waiter/me/shift/clock-out', {}, { token });
+  },
+
+  /** Get individual performance report */
+  async getPersonalReport(range: string = 'today', token: string): Promise<WaiterPersonalReport> {
+    return apiClient.get<WaiterPersonalReport>(`/api/waiter/me/report?range=${range}`, { token });
+  },
+
+  /** Consolidated waiter reports for managers/admins */
+  async getReportsSummary(token: string): Promise<any[]> {
+    return apiClient.get<any[]>('/api/waiter/reports/summary', { token });
   },
 };
